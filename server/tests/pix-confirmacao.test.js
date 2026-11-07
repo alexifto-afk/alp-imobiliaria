@@ -35,3 +35,30 @@ test('Pix aprovado deve quitar a parcela', async () => {
   assert.equal(alteracoes[1].data.status, 'PAID');
   assert.equal(alteracoes[1].where.id, 'parcela-teste');
 });
+
+test('Pix pendente não deve quitar a parcela', async () => {
+  let parcelaFoiQuitada = false;
+  let statusPix = null;
+
+  const tx = {
+    pixPayment: {
+      update: async ({ data }) => {
+        statusPix = data.status;
+      }
+    },
+    installment: {
+      update: async () => {
+        parcelaFoiQuitada = true;
+      }
+    }
+  };
+
+  await confirmarPagamentoPix(
+    tx,
+    { status: 'pending' },
+    { id: 'pix-teste', installmentId: 'parcela-teste' }
+  );
+
+  assert.equal(statusPix, 'pending');
+  assert.equal(parcelaFoiQuitada, false);
+});
