@@ -224,8 +224,24 @@ app.post('/api/webhooks/mercadopago',wrap(async(req,res)=>{
  await db.$transaction(async tx=>{
   await tx.pixPayment.update({where:{id:p.id},data:{status:payment.status||'unknown',paidAt:payment.status==='approved'?new Date(payment.date_approved||Date.now()):null}});
   if(payment.status==='approved')await tx.installment.update({where:{id:p.installmentId},data:{status:'PAID'}});
+
+  
  });
  res.sendStatus(200);
+ // Diagnóstico temporário da lógica de baixa do Pix.
+// Não cria pagamentos nem altera o banco de dados.
+function testarBaixaPix() {
+  const pagamentoSimulado = { status: 'approved' };
+  const parcelaSimulada = { status: 'OPEN' };
+
+  if (pagamentoSimulado.status === 'approved') {
+    parcelaSimulada.status = 'PAID';
+  }
+
+  console.log('[TESTE PIX] Resultado:', parcelaSimulada.status);
+}
+
+testarBaixaPix();
 }));
 
 app.get('/api/my/contracts',auth,current,wrap(async(req,res)=>{if(req.auth.role==='ADMIN')return res.json([]);res.json(await db.contract.findMany({where:{client:{userId:req.auth.id}},include:{property:true,installments:{orderBy:{number:'asc'},include:{receipts:true}}}}))}));
