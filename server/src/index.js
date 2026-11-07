@@ -117,7 +117,7 @@ app.post('/api/my/installments/:id/pix',auth,current,wrap(async(req,res)=>{
  if(!p){p=await db.pixPayment.create({data:{installmentId:i.id,amount:i.amount,idempotencyKey:crypto.randomUUID()}})}
  if(!p.providerId){
   const email=txt(i.contract.client.email);if(!email)return res.status(400).json({error:'Cadastre seu e-mail no perfil antes de pagar'});
-  const payment=await mpCall('/v1/payments',{method:'POST',headers:{'X-Idempotency-Key':p.idempotencyKey},body:JSON.stringify({transaction_amount:i.amount/100,description:`ALP Imobiliária - parcela ${i.number}/${i.contract.installmentCount}`,payment_method_id:'pix',payer:{email},external_reference:i.id,notification_url:process.env.MP_WEBHOOK_URL||undefined})});
+  const payment=await mpCall('/v1/payments',{method:'POST',headers:{'X-Idempotency-Key':p.idempotencyKey},body:JSON.stringify({transaction_amount:i.amount/100,description:`ALP Imobiliária - parcela ${i.number}/${i.contract.installmentCount}`,payment_method_id:'pix',payer:{email},external_reference:i.id,notification_url:undefined})});
   const tx=payment.point_of_interaction?.transaction_data||{};
   p=await db.pixPayment.update({where:{id:p.id},data:{providerId:String(payment.id),status:payment.status||'pending',qrCode:tx.qr_code||null,qrBase64:tx.qr_code_base64||null}});
  }
