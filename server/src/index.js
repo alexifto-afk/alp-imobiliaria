@@ -131,16 +131,51 @@ app.get('/api/my/installments/:id/payment-status',auth,current,wrap(async(req,re
  res.json({installmentStatus:i.status,paymentStatus:p?.status||null});
 }));
 // Verifica assinatura HMAC SHA256 e consulta o pagamento na API antes de dar baixa.
-function validMpSignature(req,paymentId){
- const secret=txt(process.env.MP_WEBHOOK_SECRET),signature=String(req.get('x-signature')||''),requestId=String(req.get('x-request-id')||'');
- const ts=signature.match(/(?:^|,)\s*ts=([^,]+)/)?.[1],v1=signature.match(/(?:^|,)\s*v1=([a-f0-9]+)/i)?.[1];
- if(!secret||!ts||!v1||!requestId||!/^\d+$/.test(ts))return false;
- if(Math.abs(Date.now()-Number(ts))>10*60*1000)return false;
- const dataId=String(req.query['data.id']||paymentId).toLowerCase();
- const manifest=`id:${dataId};request-id:${requestId};ts:${ts};`;
- const digest=crypto.createHmac('sha256',secret).update(manifest).digest('hex');
- return v1.length===digest.length&&crypto.timingSafeEqual(Buffer.from(v1,'hex'),Buffer.from(digest,'hex'));
+
+function validMpSignature(req, paymentId) {
+  const secret = txt(process.env.MP_WEBHOOK_SECRET);
+  const signature = String(req.get('x-signature') || '');
+  const requestId = String(req.get('x-request-id') || '');
+
+  const ts = signature.match(/(?:^|,)\s*ts=([^,]+)/)?.[1];
+  const v1 = signature.match(/(?:^|,)\s*v1=([a-f0-9]+)/i)?.[1];
+
+  const reject = (reason) => {
+    console.warn('[mercadopago:webhook] assinatura recusada:', reason);
+    return false;
+  };
+
+  if (!secret) return reject('MP_WEBHOOK_SECRET ausente');
+  if (!signature) return reject('cabecalho x-signature ausente');
+  if (!requestId) return reject('cabecalho x-request-id ausente');
+  if (!ts || !v1) return reject('ts ou v1 ausente');
+  if (!/^\d+$/.test(ts)) return reject('timestamp invalido');
+  if (!/^[a-f0-9]{64}$/i.test(v1)) {
+    return reject('formato v1 invalido');
+  }
+
+  if (Math.abs(Date.now() - Number(ts)) > 10 * 60 * 1000) {
+    return reject('timestamp fora da janela de 10 minutos');
+  }
+
+  const dataId = String(req.query['data.id'] || paymentId).toLowerCase();
+  const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+
+  const digest = crypto
+    .createHmac('sha256', secret)
+    .update(manifest)
+    .digest('hex');
+
+  if (!crypto.timingSafeEqual(
+    Buffer.from(v1, 'hex'),
+    Buffer.from(digest, 'hex')
+  )) {
+    return reject('HMAC nao corresponde a assinatura recebida');
+  }
+
+  return true;
 }
+
 app.post('/api/webhooks/mercadopago',wrap(async(req,res)=>{
  const id=String(req.query['data.id']||req.body?.data?.id||'');
  const type=String(req.query.type||req.body?.type||'');
