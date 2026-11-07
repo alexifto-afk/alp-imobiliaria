@@ -155,7 +155,7 @@ console.log('[mercadopago:webhook] diagnostico da chave:', {
     return false;
   };
 
-  if (!secret) return reject('MP_WEBHOOK_SECRET ausente');
+ if (secrets.length === 0) return reject('Nenhuma chave de assinatura configurada');
   if (!signature) return reject('cabecalho x-signature ausente');
   if (!requestId) return reject('cabecalho x-request-id ausente');
   if (!ts || !v1) return reject('ts ou v1 ausente');
