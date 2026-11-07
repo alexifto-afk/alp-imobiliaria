@@ -154,9 +154,9 @@ function validMpSignature(req, paymentId) {
     return reject('formato v1 invalido');
   }
 
-  if (Math.abs(Date.now() - Number(ts)) > 10 * 60 * 1000) {
-    return reject('timestamp fora da janela de 10 minutos');
-  }
+ // //if (Math.abs(Date.now() - Number(ts)) > 10 * 60 * 1000) {
+  //  return reject('timestamp fora da janela de 10 minutos');
+ // }
 
   const dataId = String(req.query['data.id'] || paymentId).toLowerCase();
   const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
