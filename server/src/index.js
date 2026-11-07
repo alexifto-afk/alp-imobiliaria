@@ -133,7 +133,10 @@ app.get('/api/my/installments/:id/payment-status',auth,current,wrap(async(req,re
 // Verifica assinatura HMAC SHA256 e consulta o pagamento na API antes de dar baixa.
 
 function validMpSignature(req, paymentId) {
-  const secret = txt(process.env.MP_WEBHOOK_SECRET);
+  const secrets = [
+  txt(process.env.MP_WEBHOOK_SECRET),
+  txt(process.env.MP_WEBHOOK_SECRET_PROD)
+].filter(Boolean);
 console.log('[mercadopago:webhook] diagnostico da chave:', {
   configurada: Boolean(secret),
   possuiEspacosNasPontas:
