@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+enum Role {
+  ADMIN
+  CLIENT
+}
+enum InstallmentStatus {
+  OPEN
+  PENDING_REVIEW
+  PAID
+  REJECTED
+}
+enum ReceiptStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+model User {
+  id           String   @id @default(cuid())
+  cpf          String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(CLIENT)
+  active       Boolean  @default(true)
+  mustChangePassword Boolean @default(false)
+  createdAt    DateTime @default(now())
+  client       Client?
+}
+model Client {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  phone         String?
+  email         String?
+  rg            String?
+  birthDate     DateTime? @db.Date
+  sex           String?
+  maritalStatus String?
+  spouseName    String?
+  spouseCpf     String?
+  contracts     Contract[]
+}
+model Property {
+  id          String   @id @default(cuid())
+  reference   String
+  address     String
+  notes       String?
+  stateCode   String?
+  cityCode    String?
+  city        String?
+  financed    Boolean?
+  active      Boolean  @default(true)
+  contracts   Contract[]
+  createdAt   DateTime @default(now())
+}
+model Contract {
+  id               String   @id @default(cuid())
+  clientId         String
+  client           Client   @relation(fields: [clientId], references: [id])
+  propertyId       String
+  property         Property @relation(fields: [propertyId], references: [id])
+  propertyPrice    Int?
+  financedAmount   Int?
+  downPayment      Int
+  interestType     String   @default("NONE")
+  monthlyRate      Decimal? @db.Decimal(10,6)
+  installmentCount Int
+  startDate        DateTime
+  installments     Installment[]
+  createdAt        DateTime @default(now())
+}
+model Installment {
+  id          String   @id @default(cuid())
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id])
+  number      Int
+  dueDate     DateTime
+  amount      Int
+  status      InstallmentStatus @default(OPEN)
+  receipts    Receipt[]
+  payments    PixPayment[]
+  @@unique([contractId,number])
+}
+model Receipt {
+  id            String   @id @default(cuid())
+  installmentId String
+  installment   Installment @relation(fields: [installmentId], references: [id])
+  fileName      String
+  originalName  String
+  mimeType      String
+  status        ReceiptStatus @default(PENDING)
+  note          String?
+  reviewedAt    DateTime?
+  createdAt     DateTime @default(now())
+}
+
+// Cobranças Pix do Mercado Pago. Um pagamento aprovado é único por ID externo.
+model PixPayment {
+  id String @id @default(cuid())
+  installmentId String
+  installment Installment @relation(fields: [installmentId], references: [id])
+  providerId String? @unique
+  idempotencyKey String @unique
+  status String @default("CREATED")
+  amount Int
+  qrCode String?
+  qrBase64 String? @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  paidAt DateTime?
+  @@index([installmentId, status])
+}
