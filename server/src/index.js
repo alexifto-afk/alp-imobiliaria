@@ -166,6 +166,11 @@ function validMpSignature(req, paymentId) {
 });
 
   const dataId = String(req.query['data.id'] || paymentId).toLowerCase();
+ console.log('[mercadopago:webhook] comparacao de IDs:', {
+  queryId: String(req.query['data.id'] || ''),
+  bodyId: String(req.body?.data?.id || ''),
+  idUtilizado: dataId
+});
   const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
 
   const digest = crypto
