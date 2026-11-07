@@ -228,20 +228,7 @@ app.post('/api/webhooks/mercadopago',wrap(async(req,res)=>{
   
  });
  res.sendStatus(200);
- // Diagnóstico temporário da lógica de baixa do Pix.
-// Não cria pagamentos nem altera o banco de dados.
-function testarBaixaPix() {
-  const pagamentoSimulado = { status: 'approved' };
-  const parcelaSimulada = { status: 'OPEN' };
 
-  if (pagamentoSimulado.status === 'approved') {
-    parcelaSimulada.status = 'PAID';
-  }
-
-  console.log('[TESTE PIX] Resultado:', parcelaSimulada.status);
-}
-
-testarBaixaPix();
 }));
 
 app.get('/api/my/contracts',auth,current,wrap(async(req,res)=>{if(req.auth.role==='ADMIN')return res.json([]);res.json(await db.contract.findMany({where:{client:{userId:req.auth.id}},include:{property:true,installments:{orderBy:{number:'asc'},include:{receipts:true}}}}))}));
