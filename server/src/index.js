@@ -214,6 +214,27 @@ if (!assinaturaValida) {
 }
 
 app.post('/api/webhooks/mercadopago',wrap(async(req,res)=>{
+
+async function confirmarPagamentoPix(tx, pagamento, cobranca) {
+  await tx.pixPayment.update({
+    where: { id: cobranca.id },
+    data: {
+      status: pagamento.status || 'unknown',
+      paidAt: pagamento.status === 'approved'
+        ? new Date(pagamento.date_approved || Date.now())
+        : null
+    }
+  });
+
+  if (pagamento.status === 'approved') {
+    await tx.installment.update({
+      where: { id: cobranca.installmentId },
+      data: { status: 'PAID' }
+    });
+  }
+}
+
+ 
  const id=String(req.query['data.id']||req.body?.data?.id||'');
  const type=String(req.query.type||req.body?.type||'');
  if(type!=='payment'||!/^\d+$/.test(id))return res.sendStatus(200);
@@ -224,12 +245,9 @@ app.post('/api/webhooks/mercadopago',wrap(async(req,res)=>{
 
  
  if(!p||payment.payment_method_id!=='pix'||payment.external_reference!==p.installmentId||Math.round(Number(payment.transaction_amount)*100)!==p.amount)return res.sendStatus(200);
- await db.$transaction(async tx=>{
-  await tx.pixPayment.update({where:{id:p.id},data:{status:payment.status||'unknown',paidAt:payment.status==='approved'?new Date(payment.date_approved||Date.now()):null}});
-  if(payment.status==='approved')await tx.installment.update({where:{id:p.installmentId},data:{status:'PAID'}});
-
-  
- });
+ await db.$transaction(async (tx) => {
+  await confirmarPagamentoPix(tx, payment, p);
+});
  res.sendStatus(200);
 
 }));
