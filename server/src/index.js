@@ -134,6 +134,13 @@ app.get('/api/my/installments/:id/payment-status',auth,current,wrap(async(req,re
 
 function validMpSignature(req, paymentId) {
   const secret = txt(process.env.MP_WEBHOOK_SECRET);
+console.log('[mercadopago:webhook] diagnostico da chave:', {
+  configurada: Boolean(secret),
+  possuiEspacosNasPontas:
+    String(process.env.MP_WEBHOOK_SECRET || '') !==
+    String(process.env.MP_WEBHOOK_SECRET || '').trim()
+});
+ 
   const signature = String(req.get('x-signature') || '');
   const requestId = String(req.get('x-request-id') || '');
 
