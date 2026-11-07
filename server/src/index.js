@@ -158,6 +158,13 @@ function validMpSignature(req, paymentId) {
   //  return reject('timestamp fora da janela de 10 minutos');
  // }
 
+ console.log('[mercadopago:webhook] origem do ID:', {
+  queryDataId: Boolean(req.query['data.id']),
+  bodyDataId: Boolean(req.body?.data?.id),
+  queryType: String(req.query.type || ''),
+  bodyType: String(req.body?.type || '')
+});
+
   const dataId = String(req.query['data.id'] || paymentId).toLowerCase();
   const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
 
