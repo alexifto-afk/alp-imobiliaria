@@ -179,7 +179,13 @@ console.log('[mercadopago:webhook] diagnostico da chave:', {
   idUtilizado: dataId
 });
   const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
-
+console.log('[mercadopago:webhook] diagnostico da assinatura:', {
+  dataId,
+  requestIdPresente: Boolean(requestId),
+  timestampPresente: Boolean(ts),
+  assinaturaPresente: Boolean(v1),
+  tamanhoAssinatura: v1?.length || 0
+});
   const digest = crypto
     .createHmac('sha256', secret)
     .update(manifest)
