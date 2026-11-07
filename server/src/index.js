@@ -221,13 +221,7 @@ app.post('/api/webhooks/mercadopago',wrap(async(req,res)=>{
  const payment=await mpCall('/v1/payments/'+encodeURIComponent(id));
  
  const p=await db.pixPayment.findUnique({where:{providerId:String(payment.id)}});
- console.log('[PIX DIAGNOSTICO]', {
-  pagamentoEncontrado: Boolean(p),
-  statusMercadoPago: payment.status,
-  metodoPix: payment.payment_method_id === 'pix',
-  referenciaCorreta: Boolean(p && payment.external_reference === p.installmentId),
-  valorCorreto: Boolean(p && Math.round(Number(payment.transaction_amount) * 100) === p.amount)
-});
+
  
  if(!p||payment.payment_method_id!=='pix'||payment.external_reference!==p.installmentId||Math.round(Number(payment.transaction_amount)*100)!==p.amount)return res.sendStatus(200);
  await db.$transaction(async tx=>{
