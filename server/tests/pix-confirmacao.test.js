@@ -1,42 +1,37 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { confirmarPagamentoPix } from '../src/pix-confirmation.js';
 
-test('Pix aprovado deve marcar a parcela como PAID', async () => {
-  const parcela = { id: 'parcela-teste', status: 'OPEN' };
-  const cobranca = { id: 'pix-teste', status: 'pending' };
+test('Pix aprovado deve quitar a parcela', async () => {
+  const alteracoes = [];
 
   const tx = {
     pixPayment: {
-      update: async ({ data }) => {
-        Object.assign(cobranca, data);
+      update: async (dados) => {
+        alteracoes.push({ tipo: 'pix', ...dados });
       }
     },
     installment: {
-      update: async ({ data }) => {
-        Object.assign(parcela, data);
+      update: async (dados) => {
+        alteracoes.push({ tipo: 'parcela', ...dados });
       }
     }
   };
 
-  const pagamento = {
-    status: 'approved',
-    date_approved: new Date().toISOString()
-  };
-
-  await tx.pixPayment.update({
-    data: {
-      status: pagamento.status,
-      paidAt: new Date(pagamento.date_approved)
+  await confirmarPagamentoPix(
+    tx,
+    {
+      status: 'approved',
+      date_approved: '2026-11-07T12:00:00Z'
+    },
+    {
+      id: 'pix-teste',
+      installmentId: 'parcela-teste'
     }
-  });
+  );
 
-  if (pagamento.status === 'approved') {
-    await tx.installment.update({
-      data: { status: 'PAID' }
-    });
-  }
-
-  assert.equal(cobranca.status, 'approved');
-  assert.equal(parcela.status, 'PAID');
+  assert.equal(alteracoes[0].data.status, 'approved');
+  assert.equal(alteracoes[1].data.status, 'PAID');
+  assert.equal(alteracoes[1].where.id, 'parcela-teste');
 });
