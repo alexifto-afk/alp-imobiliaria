@@ -189,17 +189,26 @@ console.log('[mercadopago:webhook] diagnostico da assinatura:', {
   assinaturaPresente: Boolean(v1),
   tamanhoAssinatura: v1?.length || 0
 });
-  const digest = crypto
-    .createHmac('sha256', secret)
-    .update(manifest)
-    .digest('hex');
+ 
+ 
+const assinaturaRecebida = Buffer.from(v1, 'hex');
 
-  if (!crypto.timingSafeEqual(
-    Buffer.from(v1, 'hex'),
-    Buffer.from(digest, 'hex')
-  )) {
-    return reject('HMAC nao corresponde a assinatura recebida');
-  }
+const assinaturaValida = secrets.some((chave) => {
+  const digest = crypto
+    .createHmac('sha256', chave)
+    .update(manifest)
+    .digest();
+
+  return crypto.timingSafeEqual(
+    assinaturaRecebida,
+    digest
+  );
+});
+
+if (!assinaturaValida) {
+  return reject('HMAC nao corresponde a nenhuma chave configurada');
+} 
+
 
   return true;
 }
