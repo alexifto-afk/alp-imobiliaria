@@ -138,7 +138,7 @@ function validMpSignature(req, paymentId) {
   txt(process.env.MP_WEBHOOK_SECRET_PROD)
 ].filter(Boolean);
 console.log('[mercadopago:webhook] diagnostico da chave:', {
-  configurada: Boolean(secret),
+  configurada: secrets.length > 0,
   possuiEspacosNasPontas:
     String(process.env.MP_WEBHOOK_SECRET || '') !==
     String(process.env.MP_WEBHOOK_SECRET || '').trim()
