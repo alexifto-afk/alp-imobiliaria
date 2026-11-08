@@ -239,6 +239,88 @@ app.post('/api/webhooks/mercadopago',wrap(async(req,res)=>{
 
 }));
 
+app.get('/api/installments/:id/receipt-pdf', auth, current, wrap(async (req, res) => {
+  const parcela = await db.installment.findUnique({
+    where: { id: req.params.id },
+    include: {
+      contract: {
+        include: {
+          client: { include: { user: true } },
+          property: true
+        }
+      }
+    }
+  });
+
+  if (!parcela) {
+    return res.status(404).json({ error: 'Parcela não encontrada' });
+  }
+
+  if (
+    req.auth.role !== 'ADMIN' &&
+    parcela.contract.client.userId !== req.auth.id
+  ) {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+
+  if (parcela.status !== 'PAID') {
+    return res.status(409).json({
+      error: 'O recibo só está disponível após a quitação'
+    });
+  }
+
+  const pagamento = await db.pixPayment.findFirst({
+    where: {
+      installmentId: parcela.id,
+      status: 'approved',
+      amount: parcela.amount,
+      paidAt: { not: null }
+    },
+    orderBy: { paidAt: 'desc' }
+  });
+
+  if (!pagamento) {
+    return res.status(404).json({
+      error: 'Não foi localizado um Pix aprovado para esta parcela'
+    });
+  }
+
+  const logoPath = path.resolve('assets/logo-alp.jpeg');
+
+  const dados = {
+    numeroRecibo: pagamento.id,
+    transacao: pagamento.providerId || 'Não informada',
+    cliente: parcela.contract.client.user.name,
+    cpf: parcela.contract.client.user.cpf,
+    imovel: parcela.contract.property.address,
+    contrato: parcela.contract.id,
+    dataPagamento: pagamento.paidAt,
+    numeroParcela: `${parcela.number}/${parcela.contract.installmentCount}`,
+    vencimento: parcela.dueDate,
+    valorCentavos: pagamento.amount
+  };
+
+  const nomeArquivo = `recibo-alp-${parcela.number}.pdf`;
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${nomeArquivo}"`
+  );
+
+  const pdf = gerarReciboPDF(
+    dados,
+    fs.existsSync(logoPath) ? logoPath : null
+  );
+
+  pdf.on('error', erro => {
+    console.error('Erro ao gerar recibo:', erro);
+    res.destroy(erro);
+  });
+
+  pdf.pipe(res);
+}));
+
 app.get('/api/my/contracts',auth,current,wrap(async(req,res)=>{if(req.auth.role==='ADMIN')return res.json([]);res.json(await db.contract.findMany({where:{client:{userId:req.auth.id}},include:{property:true,installments:{orderBy:{number:'asc'},include:{receipts:true}}}}))}));
 app.get('/api/receipts',auth,current,admin,wrap(async(_req,res)=>{
   const records=await db.receipt.findMany({
