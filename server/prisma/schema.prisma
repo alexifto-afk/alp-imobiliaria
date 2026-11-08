@@ -29,6 +29,7 @@ model User {
   active       Boolean  @default(true)
   mustChangePassword Boolean @default(false)
   createdAt    DateTime @default(now())
+  passwordResets PasswordReset[]
   client       Client?
 }
 model Client {
@@ -114,4 +115,18 @@ model PixPayment {
   updatedAt DateTime @updatedAt
   paidAt DateTime?
   @@index([installmentId, status])
+}
+
+// Códigos temporários de recuperação (não armazena código em texto puro).
+model PasswordReset {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel String
+  codeHash String
+  attempts Int @default(0)
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, channel, createdAt])
 }
