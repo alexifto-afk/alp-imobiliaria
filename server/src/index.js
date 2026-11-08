@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { confirmarPagamentoPix } from './pix-confirmation.js';
+import { gerarReciboPDF } from './recibo-pdf.js';
 import express from 'express';import cors from 'cors';import bcrypt from 'bcryptjs';import jwt from 'jsonwebtoken';import multer from 'multer';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {PrismaClient} from '@prisma/client';
 const db=new PrismaClient(),app=express();app.disable('x-powered-by');app.use(express.json({limit:'100kb'}));
 const origins=(process.env.CLIENT_ORIGIN||'http://localhost:5173').split(',').map(s=>s.trim());app.use(cors({origin:(origin,cb)=>cb(null,!origin||origins.includes(origin))}));
