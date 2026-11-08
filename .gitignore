@@ -1,0 +1,13 @@
+
+# Dependências
+node_modules/
+**/node_modules/
+
+# Configurações sensíveis
+.env
+.env.*
+!.env.example
+
+# Arquivos temporários
+server/recibo-teste.pdf
+.vscode/
