@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import PDFDocument from 'pdfkit';
 import express from 'express';import cors from 'cors';import bcrypt from 'bcryptjs';import jwt from 'jsonwebtoken';import multer from 'multer';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {PrismaClient} from '@prisma/client';
 const db=new PrismaClient(),app=express();app.disable('x-powered-by');app.use(express.json({limit:'100kb'}));
 const origins=(process.env.CLIENT_ORIGIN||'http://localhost:5173').split(',').map(s=>s.trim());app.use(cors({origin:(origin,cb)=>cb(null,!origin||origins.includes(origin))}));
@@ -235,6 +236,53 @@ app.get('/api/receipts',auth,current,admin,wrap(async(_req,res)=>{
   });
   res.json(records);
 }));
+
+// Recibo de quitacao: rota utilizada pelo botao "Baixar comprovante" do portal do cliente.
+app.get('/api/installments/:id/receipt-pdf',auth,current,wrap(async(req,res)=>{
+  const installment=await db.installment.findUnique({where:{id:req.params.id},include:{
+    contract:{include:{client:{include:{user:{select:{id:true,name:true,cpf:true}}}},property:true}},
+    receipts:{where:{status:'APPROVED'},orderBy:{reviewedAt:'desc'},take:1},
+    payments:{where:{status:'approved'},orderBy:{paidAt:'desc'},take:1}
+  }});
+  if(!installment)return res.status(404).json({error:'Parcela não encontrada'});
+  if(req.auth.role!=='ADMIN'&&installment.contract.client.userId!==req.auth.id)
+    return res.status(403).json({error:'Você não tem acesso a este recibo'});
+  if(installment.status!=='PAID')return res.status(409).json({error:'O recibo estará disponível após a confirmação do pagamento'});
+  const contract=installment.contract;
+  const payment=installment.payments[0];
+  const receipt=installment.receipts[0];
+  const paidAt=payment?.paidAt||receipt?.reviewedAt||null;
+  const formatMoney=n=>(Number(n||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const formatDate=d=>d?new Date(d).toLocaleDateString('pt-BR',{timeZone:'UTC'}):'Não informada';
+  const doc=new PDFDocument({size:'A4',margin:52,info:{Title:'Recibo de pagamento - A.L.P Imobiliária',Author:'A.L.P Imobiliária'}});
+  res.status(200).type('application/pdf');
+  res.setHeader('Content-Disposition',`attachment; filename="recibo-alp-parcela-${installment.number}.pdf"`);
+  doc.on('error',e=>{console.error('Falha ao gerar recibo:',e);res.destroy(e)});
+  doc.pipe(res);
+  doc.rect(0,0,595,115).fill('#3349B8');
+  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(21).text('A.L.P IMOBILIÁRIA',52,40);
+  doc.font('Helvetica').fontSize(10).text('RECIBO DE PAGAMENTO',52,72);
+  doc.fillColor('#1E293B').font('Helvetica-Bold').fontSize(17).text('Parcela quitada',52,145);
+  doc.font('Helvetica').fontSize(10).fillColor('#64748B').text('Comprovante emitido a partir dos registros do sistema.',52,175);
+  doc.moveTo(52,205).lineTo(543,205).strokeColor('#CBD5E1').stroke();
+  let y=228;
+  const line=(label,value)=>{doc.font('Helvetica-Bold').fontSize(10).fillColor('#475569').text(label,52,y,{width:170});doc.font('Helvetica').fillColor('#0F172A').text(String(value),220,y,{width:320});y=Math.max(doc.y,y+22)+10;};
+  line('Cliente',contract.client.user.name);
+  line('CPF',contract.client.user.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4'));
+  line('Imóvel',contract.property.reference||'Não informado');
+  line('Endereço',contract.property.address||'Não informado');
+  line('Parcela',`${installment.number} de ${contract.installmentCount}`);
+  line('Vencimento',formatDate(installment.dueDate));
+  line('Valor pago',formatMoney(installment.amount));
+  line('Situação','PAGO');
+  line('Data da confirmação',formatDate(paidAt));
+  line('Forma de confirmação',payment?'Pix (Mercado Pago)':receipt?'Comprovante aprovado':'Registro de quitação');
+  if(payment?.providerId)line('ID do pagamento',payment.providerId);
+  doc.moveTo(52,Math.min(y+20,690)).lineTo(543,Math.min(y+20,690)).strokeColor('#CBD5E1').stroke();
+  doc.font('Helvetica').fontSize(9).fillColor('#64748B').text('Este recibo comprova a baixa da parcela registrada no sistema A.L.P Imobiliária. Não substitui comprovante bancário.',52,735,{width:490,align:'center'});
+  doc.end();
+}));
+
 app.get('/api/receipts/:id/file',auth,current,wrap(async(req,res)=>{const r=await db.receipt.findUnique({where:{id:req.params.id},include:{installment:{include:{contract:{include:{client:true}}}}}});if(!r||(req.auth.role==='CLIENT'&&r.installment.contract.client.userId!==req.auth.id))return res.status(403).json({error:'Acesso negado'});const file=path.join(uploadDir,path.basename(r.fileName));if(!fs.existsSync(file))return res.status(404).json({error:'Arquivo não disponível no armazenamento'});res.type(r.mimeType);res.setHeader('Content-Disposition',`inline; filename="${r.fileName}"`);res.sendFile(file)}));
 app.patch('/api/receipts/:id',auth,current,admin,wrap(async(req,res)=>{const status=txt(req.body.status);if(!['APPROVED','REJECTED'].includes(status))return res.status(400).json({error:'Status inválido'});const previous=await db.receipt.findUnique({where:{id:req.params.id}});if(!previous)return res.status(404).json({error:'Comprovante não encontrado'});if(previous.status!=='PENDING')return res.status(409).json({error:'Comprovante já analisado'});const receipt=await db.receipt.update({where:{id:req.params.id},data:{status,note:optional(req.body.note),reviewedAt:new Date()}});await db.installment.update({where:{id:receipt.installmentId},data:{status:status==='APPROVED'?'PAID':'REJECTED'}});res.json(receipt)}));
 app.delete('/api/receipts/:id',auth,current,admin,wrap(async(req,res)=>{
