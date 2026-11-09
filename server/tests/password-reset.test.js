@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcryptjs';
-import {createPasswordReset,createEmailSender,credentialVersion,validNewPassword} from '../src/password-reset.js';
+import {createPasswordReset,credentialVersion,validNewPassword} from '../src/password-reset.js';
 import {resetDatabase} from './helpers/reset-database.js';
 
 const secret='segredo-ficticio-exclusivo-testes';
@@ -100,20 +100,4 @@ test('versão de credencial muda após redefinir a senha',async()=>{
  const {service,memory}=setup();const before=credentialVersion(memory.state.user.passwordHash,secret);
  await service.request({cpf});await service.confirm({cpf,code:'123456',newPassword});
  assert.notEqual(credentialVersion(memory.state.user.passwordHash,secret),before);
-});
-test('Resend recebe remetente, destinatário e código corretos',async()=>{
- let sent;
- const sender=createEmailSender({env:{RESEND_API_KEY:'chave-ficticia',RESET_EMAIL_FROM:'ALP <acesso@example.com>'},
-  fetchImpl:async(url,options)=>{sent={url,...options};return {ok:true}}});
- await sender('cliente@example.com','123456');
- assert.equal(sent.url,'https://api.resend.com/emails');
- assert.equal(sent.headers.Authorization,'Bearer chave-ficticia');
- const body=JSON.parse(sent.body);
- assert.equal(body.from,'ALP <acesso@example.com>');
- assert.deepEqual(body.to,['cliente@example.com']);
- assert.match(body.text,/123456/);
-});
-test('Resend não trata resposta de erro como entrega bem-sucedida',async()=>{
- const sender=createEmailSender({env:{},fetchImpl:async()=>({ok:false})});
- await assert.rejects(sender('cliente@example.com','123456'),/entregar/);
 });

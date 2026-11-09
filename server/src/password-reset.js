@@ -37,10 +37,10 @@ export function createPasswordReset({db, secret, hashPassword, sendEmail, now = 
     });
     if (reset) {
       try { await sendEmail(email, code); }
-      catch {
+      catch (error) {
         await db.passwordReset.delete({where: {id: reset.id}});
         // Não devolve status diferente que revele a existência do CPF.
-        onDeliveryError();
+        onDeliveryError(error.code || 'EMAIL_DELIVERY_FAILED');
       }
     }
     return response();
@@ -74,20 +74,4 @@ export function createPasswordReset({db, secret, hashPassword, sendEmail, now = 
     return {ok: true};
   }
   return {request, verify: body => check(body, false), confirm: body => check(body, true)};
-}
-
-export function createEmailSender({env, fetchImpl = fetch}) {
-  return async (to, code) => {
-    const response = await fetchImpl('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        from: env.RESET_EMAIL_FROM, to: [to],
-        subject: 'A.L.P Imobiliária — recuperação de senha',
-        text: `Seu código de recuperação é ${code}. Ele expira em 10 minutos. Se você não solicitou a recuperação, ignore esta mensagem. Não compartilhe este código.`
-      }),
-      signal: AbortSignal.timeout(12000)
-    });
-    if (!response.ok) throw new Error('Falha ao entregar e-mail de recuperação');
-  };
 }
