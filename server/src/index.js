@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import PDFDocument from 'pdfkit';
+import {validMpSignature} from './mp-signature.js';
+import {confirmarPagamentoPix,reconciliarCobranca,reconciliarParcela,reconciliarPendentes} from './pix-confirmation.js';
 import express from 'express';import cors from 'cors';import bcrypt from 'bcryptjs';import jwt from 'jsonwebtoken';import multer from 'multer';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {PrismaClient} from '@prisma/client';
 const db=new PrismaClient(),app=express();app.disable('x-powered-by');app.use(express.json({limit:'100kb'}));
 const origins=(process.env.CLIENT_ORIGIN||'http://localhost:5173').split(',').map(s=>s.trim());app.use(cors({origin:(origin,cb)=>cb(null,!origin||origins.includes(origin))}));
@@ -171,9 +173,16 @@ function pixPayload(key,name,city,amount,reference){
 // Cobranças dinâmicas Mercado Pago: nenhum pagamento é considerado quitado sem consulta à API.
 const mpToken=()=>txt(process.env.MERCADOPAGO_ACCESS_TOKEN);
 async function mpCall(route,opts={}){
- if(!mpToken())throw Object.assign(Error('Configure MERCADOPAGO_ACCESS_TOKEN no Render'),{status:503});
- const response=await fetch('https://api.mercadopago.com'+route,{...opts,headers:{Authorization:'Bearer '+mpToken(),'Content-Type':'application/json',...(opts.headers||{})},signal:AbortSignal.timeout(15000)});
- const data=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(Error('Mercado Pago: '+(data.message||response.status)),{status:502});return data;
+ if(!mpToken())throw Object.assign(Error('Integração Pix indisponível. Contate o administrador.'),{status:503});
+ let response;
+ try{response=await fetch('https://api.mercadopago.com'+route,{...opts,headers:{Authorization:'Bearer '+mpToken(),'Content-Type':'application/json',...(opts.headers||{})},signal:AbortSignal.timeout(15000)})}
+ catch{throw Object.assign(Error('Não foi possível consultar o Mercado Pago. Tente novamente em instantes; não pague outra cobrança se já efetuou o pagamento.'),{status:502})}
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok){
+  console.error('Mercado Pago falhou',{status:response.status,requestId:response.headers.get('x-request-id')});
+  throw Object.assign(Error(response.status===401||response.status===403?'Integração Pix indisponível. Contate o administrador.':'Não foi possível processar o Pix no Mercado Pago. Verifique seu e-mail no perfil e tente novamente em instantes.'),{status:502});
+ }
+ return data;
 }
 const allowedPayment=async(id,userId)=>{
  const i=await db.installment.findUnique({where:{id},include:{contract:{include:{client:{include:{user:true}}}}}});
@@ -181,50 +190,54 @@ const allowedPayment=async(id,userId)=>{
 };
 app.post('/api/my/installments/:id/pix',auth,current,wrap(async(req,res)=>{
  if(req.auth.role!=='CLIENT')return res.status(403).json({error:'Somente clientes'});
+ let i=await allowedPayment(req.params.id,req.auth.id);
+ if(i.status!=='PAID')i={...i,...await reconciliarParcela(db,mpCall,i.id)};
+ if(i.status==='PAID')return res.json({installmentStatus:'PAID',status:'approved',amount:i.amount});
  if(process.env.MP_PAYMENTS_ENABLED!=='true')return res.status(503).json({error:'Pix automático em preparação. Pagamentos reais ainda não habilitados.'});
- const i=await allowedPayment(req.params.id,req.auth.id);
- if(i.status==='PAID')return res.status(409).json({error:'Parcela já paga'});
  if(i.amount<=0)return res.status(400).json({error:'Parcela sem valor para cobrança'});
- let p=await db.pixPayment.findFirst({where:{installmentId:i.id,status:{in:['CREATED','pending','in_process']}},orderBy:{createdAt:'desc'}});
- if(!p){p=await db.pixPayment.create({data:{installmentId:i.id,amount:i.amount,idempotencyKey:crypto.randomUUID()}})}
+ // Serializa a reserva por parcela; chamadas concorrentes usam a mesma chave.
+ let p=await db.$transaction(async tx=>{
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${i.id}))::text`;
+  const parcela=await tx.installment.findUnique({where:{id:i.id}});
+  if(parcela.status==='PAID')return null;
+  const existente=await tx.pixPayment.findFirst({where:{installmentId:i.id,status:{in:['CREATED','pending','in_process']}},orderBy:{createdAt:'desc'}});
+  return existente||tx.pixPayment.create({data:{installmentId:i.id,amount:i.amount,idempotencyKey:crypto.randomUUID()}});
+ });
+ if(!p)return res.json({installmentStatus:'PAID',status:'approved',amount:i.amount});
  if(!p.providerId){
-  const email=txt(i.contract.client.email);if(!email)return res.status(400).json({error:'Cadastre seu e-mail no perfil antes de pagar'});
+  const email=txt(i.contract.client.email);
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:'Cadastre um e-mail válido no perfil antes de pagar'});
   const payment=await mpCall('/v1/payments',{method:'POST',headers:{'X-Idempotency-Key':p.idempotencyKey},body:JSON.stringify({transaction_amount:i.amount/100,description:`ALP Imobiliária - parcela ${i.number}/${i.contract.installmentCount}`,payment_method_id:'pix',payer:{email},external_reference:i.id,notification_url:process.env.MP_WEBHOOK_URL||undefined})});
+  if(!/^\d+$/.test(String(payment.id)))throw Object.assign(Error('Mercado Pago não retornou uma cobrança válida. Tente novamente.'),{status:502});
   const tx=payment.point_of_interaction?.transaction_data||{};
-  p=await db.pixPayment.update({where:{id:p.id},data:{providerId:String(payment.id),status:payment.status||'pending',qrCode:tx.qr_code||null,qrBase64:tx.qr_code_base64||null}});
+  p=await db.pixPayment.update({where:{id:p.id},data:{providerId:String(payment.id),qrCode:tx.qr_code||null,qrBase64:tx.qr_code_base64||null}});
+  await db.$transaction(tx=>confirmarPagamentoPix(tx,payment,p));
+  p=await db.pixPayment.findUnique({where:{id:p.id}});
  }
- res.json({paymentId:p.providerId,payload:p.qrCode,qrCode:p.qrBase64?`data:image/png;base64,${p.qrBase64}`:p.qrCode?await QRCode.toDataURL(p.qrCode):null,amount:i.amount,status:p.status,automaticConfirmation:true,notice:'Aguardando confirmação do Mercado Pago. Não pague a mesma cobrança duas vezes.'});
+ if(p.status==='approved')return res.json({installmentStatus:'PAID',status:'approved',amount:i.amount});
+ if(!['pending','in_process'].includes(p.status)||!p.qrCode)return res.status(409).json({error:'Cobrança Pix indisponível. Tente novamente para consultar ou gerar uma nova cobrança.'});
+ res.json({paymentId:p.providerId,payload:p.qrCode,qrCode:p.qrBase64?`data:image/png;base64,${p.qrBase64}`:await QRCode.toDataURL(p.qrCode),amount:i.amount,status:p.status,automaticConfirmation:true,notice:'Aguardando confirmação do Mercado Pago. Não pague a mesma cobrança duas vezes.'});
 }));
-// Status consultado pelo cliente para atualizar o modal sem atualizar toda a página.
 app.get('/api/my/installments/:id/payment-status',auth,current,wrap(async(req,res)=>{
  if(req.auth.role!=='CLIENT')return res.status(403).json({error:'Somente clientes'});
- const i=await allowedPayment(req.params.id,req.auth.id);
+ let i=await allowedPayment(req.params.id,req.auth.id);
+ if(i.status!=='PAID')i=await reconciliarParcela(db,mpCall,i.id);
  const p=await db.pixPayment.findFirst({where:{installmentId:i.id},orderBy:{createdAt:'desc'}});
+ res.setHeader('Cache-Control','no-store');
  res.json({installmentStatus:i.status,paymentStatus:p?.status||null});
 }));
-// Verifica assinatura HMAC SHA256 e consulta o pagamento na API antes de dar baixa.
-function validMpSignature(req,paymentId){
- const secret=txt(process.env.MP_WEBHOOK_SECRET),signature=String(req.get('x-signature')||''),requestId=String(req.get('x-request-id')||'');
- const ts=signature.match(/(?:^|,)\s*ts=([^,]+)/)?.[1],v1=signature.match(/(?:^|,)\s*v1=([a-f0-9]+)/i)?.[1];
- if(!secret||!ts||!v1||!requestId||!/^\d+$/.test(ts))return false;
- if(Math.abs(Date.now()-Number(ts))>10*60*1000)return false;
- const dataId=String(req.query['data.id']||paymentId).toLowerCase();
- const manifest=`id:${dataId};request-id:${requestId};ts:${ts};`;
- const digest=crypto.createHmac('sha256',secret).update(manifest).digest('hex');
- return v1.length===digest.length&&crypto.timingSafeEqual(Buffer.from(v1,'hex'),Buffer.from(digest,'hex'));
-}
 app.post('/api/webhooks/mercadopago',wrap(async(req,res)=>{
  const id=String(req.query['data.id']||req.body?.data?.id||'');
  const type=String(req.query.type||req.body?.type||'');
  if(type!=='payment'||!/^\d+$/.test(id))return res.sendStatus(200);
- if(!validMpSignature(req,id))return res.sendStatus(401);
- const payment=await mpCall('/v1/payments/'+encodeURIComponent(id));
- const p=await db.pixPayment.findUnique({where:{providerId:String(payment.id)}});
- if(!p||payment.payment_method_id!=='pix'||payment.external_reference!==p.installmentId||Math.round(Number(payment.transaction_amount)*100)!==p.amount)return res.sendStatus(200);
- await db.$transaction(async tx=>{
-  await tx.pixPayment.update({where:{id:p.id},data:{status:payment.status||'unknown',paidAt:payment.status==='approved'?new Date(payment.date_approved||Date.now()):null}});
-  if(payment.status==='approved')await tx.installment.update({where:{id:p.installmentId},data:{status:'PAID'}});
- });
+ if(!validMpSignature(req,id,txt(process.env.MP_WEBHOOK_SECRET))){
+  console.warn('Webhook Pix rejeitado: assinatura inválida ou expirada');
+  return res.sendStatus(401);
+ }
+ const p=await db.pixPayment.findUnique({where:{providerId:id}});
+ // A notificação pode chegar antes de salvarmos providerId. Solicita nova tentativa.
+ if(!p)return res.status(503).json({error:'Cobrança ainda não localizada; tente reenviar a notificação'});
+ await reconciliarCobranca(db,mpCall,p);
  res.sendStatus(200);
 }));
 
@@ -300,4 +313,14 @@ app.delete('/api/receipts/:id',auth,current,admin,wrap(async(req,res)=>{
  res.json({ok:true});
 }));
 app.use((err,_req,res,_next)=>{console.error(err);if(err.code==='P2002')return res.status(409).json({error:'CPF ou valor único já cadastrado'});if(err.code==='P2025')return res.status(404).json({error:'Registro não encontrado'});res.status(err.status||400).json({error:err.message||'Erro ao processar solicitação'})});
-app.listen(Number(process.env.PORT)||3001,()=>console.log('API iniciada'));
+// Recupera notificações perdidas mesmo quando o cliente fecha o modal.
+let conciliandoPix=false;
+async function conciliarPix(){
+ if(conciliandoPix||!mpToken())return;
+ conciliandoPix=true;
+ try{await reconciliarPendentes(db,mpCall,id=>console.warn('Conciliação Pix pendente',{cobrancaId:id}))}
+ catch{console.error('Falha no ciclo de conciliação Pix; nova tentativa no próximo ciclo')}
+ finally{conciliandoPix=false}
+}
+const pixTimer=setInterval(conciliarPix,60000);pixTimer.unref();
+app.listen(Number(process.env.PORT)||3001,()=>{console.log('API iniciada');void conciliarPix()});
