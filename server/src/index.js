@@ -1,98 +1,33 @@
 import 'dotenv/config';
 import PDFDocument from 'pdfkit';
+import {credentialVersion} from './password-reset.js';
+import {registerPasswordResetRoutes} from './password-reset-routes.js';
 import {validMpSignature} from './mp-signature.js';
 import {confirmarPagamentoPix,reconciliarCobranca,reconciliarParcela,reconciliarPendentes} from './pix-confirmation.js';
 import express from 'express';import cors from 'cors';import bcrypt from 'bcryptjs';import jwt from 'jsonwebtoken';import multer from 'multer';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {PrismaClient} from '@prisma/client';
 const db=new PrismaClient(),app=express();app.disable('x-powered-by');app.use(express.json({limit:'100kb'}));
+// Render encaminha requisições por proxy; permite limitar pelo IP do cliente.
+app.set('trust proxy',process.env.NODE_ENV==='production'?1:false);
 const origins=(process.env.CLIENT_ORIGIN||'http://localhost:5173').split(',').map(s=>s.trim());app.use(cors({origin:(origin,cb)=>cb(null,!origin||origins.includes(origin))}));
 const secret=process.env.JWT_SECRET;if(!secret||secret.length<24)throw Error('JWT_SECRET deve ter ao menos 24 caracteres');
+const issueToken=user=>jwt.sign({id:user.id,role:user.role,cv:credentialVersion(user.passwordHash,secret)},secret,{expiresIn:'12h'});
 const wrap=f=>(req,res,next)=>Promise.resolve(f(req,res,next)).catch(next);
 const digits=v=>String(v||'').replace(/\D/g,'');const txt=v=>v==null?'':String(v).trim();const optional=v=>txt(v)||null;
 const cents=v=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<0)throw Error('Valor monetário inválido (centavos).');return n};
 const auth=(req,res,next)=>{try{const token=(req.headers.authorization||'').replace(/^Bearer\s+/i,'');req.auth=jwt.verify(token,secret);next()}catch{res.status(401).json({error:'Sessão inválida ou expirada'})}};
 const admin=(req,res,next)=>req.auth.role==='ADMIN'?next():res.status(403).json({error:'Acesso restrito'});
-const current=wrap(async(req,res,next)=>{const u=await db.user.findUnique({where:{id:req.auth.id}});if(!u?.active)return res.status(401).json({error:'Conta inativa'});req.auth.role=u.role;req.auth.mustChangePassword=u.mustChangePassword;if(u.mustChangePassword&&!['/api/me','/api/me/password'].includes(req.path))return res.status(403).json({error:'Altere sua senha provisória antes de continuar'});next()});
+const current=wrap(async(req,res,next)=>{const u=await db.user.findUnique({where:{id:req.auth.id}});if(!u?.active)return res.status(401).json({error:'Conta inativa'});if(req.auth.cv!==credentialVersion(u.passwordHash,secret))return res.status(401).json({error:'Sua sessão expirou. Entre novamente.'});req.auth.role=u.role;req.auth.mustChangePassword=u.mustChangePassword;if(u.mustChangePassword&&!['/api/me','/api/me/password'].includes(req.path))return res.status(403).json({error:'Altere sua senha provisória antes de continuar'});next()});
 app.get('/api/health',(_q,r)=>r.json({ok:true}));
-app.post('/api/login',wrap(async(req,res)=>{const cpf=digits(req.body.cpf),user=await db.user.findUnique({where:{cpf}});if(!user?.active||!await bcrypt.compare(String(req.body.password||''),user.passwordHash))return res.status(401).json({error:'CPF ou senha inválidos'});const token=jwt.sign({id:user.id,role:user.role},secret,{expiresIn:'12h'});res.json({token,user:{id:user.id,name:user.name,role:user.role,mustChangePassword:user.mustChangePassword}})}));
-// Recuperação de senha: código aleatório, hash HMAC, expiração, tentativas e uso único.
-const resetKey=()=>crypto.createHash('sha256').update(secret+':alp-password-reset').digest();
-const resetHash=(id,code)=>crypto.createHmac('sha256',resetKey()).update(id+':'+code).digest('hex');
-const resetResponse={ok:true,message:'Se houver uma conta ativa com contato cadastrado, enviaremos um código.'};
-const resetLimits=new Map();
-function limitReset(req,res,next){const ip=String(req.ip||'unknown');const now=Date.now();const a=resetLimits.get(ip)||[];const recent=a.filter(t=>now-t<15*60*1000);if(recent.length>=12)return res.status(429).json({error:'Muitas solicitações. Aguarde alguns minutos.'});recent.push(now);resetLimits.set(ip,recent);if(resetLimits.size>10000)for(const [k,v] of resetLimits)if(v.every(t=>now-t>15*60*1000))resetLimits.delete(k);next()}
-async function deliverReset(channel,to,code){
- if(channel==='EMAIL'){
-  if(!process.env.RESEND_API_KEY||!process.env.RESET_EMAIL_FROM)throw Error('Envio de e-mail não configurado');
-  const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.RESET_EMAIL_FROM,to:[to],subject:'A.L.P Imobiliária — código de recuperação',text:`Seu código de recuperação é ${code}. Expira em 10 minutos. Não compartilhe este código.`}),signal:AbortSignal.timeout(12000)});
-  if(!r.ok)throw Error('Falha no serviço de e-mail');return;
- }
- if(channel==='WHATSAPP'){
-  if(!process.env.WA_ACCESS_TOKEN||!process.env.WA_PHONE_NUMBER_ID||!process.env.WA_RESET_TEMPLATE)throw Error('Envio de WhatsApp não configurado');
-  const r=await fetch(`https://graph.facebook.com/v22.0/${encodeURIComponent(process.env.WA_PHONE_NUMBER_ID)}/messages`,{method:'POST',headers:{Authorization:'Bearer '+process.env.WA_ACCESS_TOKEN,'Content-Type':'application/json'},body:JSON.stringify({messaging_product:'whatsapp',to,type:'template',template:{name:process.env.WA_RESET_TEMPLATE,language:{code:process.env.WA_TEMPLATE_LANGUAGE||'pt_BR'},components:[{type:'body',parameters:[{type:'text',text:code}]}]}}),signal:AbortSignal.timeout(12000)});
-  if(!r.ok)throw Error('Falha no serviço de WhatsApp');return;
- }
- if(channel==='SMS'){
-  if(!process.env.TWILIO_ACCOUNT_SID||!process.env.TWILIO_AUTH_TOKEN||!process.env.TWILIO_FROM)throw Error('Envio de SMS não configurado');
-  const params=new URLSearchParams({To:'+'+to,From:process.env.TWILIO_FROM,Body:`A.L.P Imobiliária: código ${code}. Validade 10 minutos. Não compartilhe.`});
-  const r=await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(process.env.TWILIO_ACCOUNT_SID)}/Messages.json`,{method:'POST',headers:{Authorization:'Basic '+Buffer.from(process.env.TWILIO_ACCOUNT_SID+':'+process.env.TWILIO_AUTH_TOKEN).toString('base64'),'Content-Type':'application/x-www-form-urlencoded'},body:params,signal:AbortSignal.timeout(12000)});
-  if(!r.ok)throw Error('Falha no serviço de SMS');return;
- }
- throw Error('Canal inválido');
-}
-const validResetInput=b=>/^\d{11}$/.test(digits(b.cpf))&&['EMAIL','WHATSAPP','SMS'].includes(b.channel);
-app.post('/api/auth/password-reset/request',limitReset,wrap(async(req,res)=>{
- const b=req.body||{};if(!validResetInput(b))return res.status(400).json({error:'Informe CPF válido e canal de envio'});
- const u=await db.user.findUnique({where:{cpf:digits(b.cpf)},include:{client:true}});
- if(!u?.active||!u.client)return res.json(resetResponse);
- let to=b.channel==='EMAIL'?txt(u.client.email).toLowerCase():digits(u.client.phone);
- if(b.channel==='EMAIL'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to))return res.json(resetResponse);
- if(b.channel!=='EMAIL'){
-  if(to.length===10||to.length===11)to='55'+to;
-  if(!/^\d{12,13}$/.test(to))return res.json(resetResponse);
- }
- const recent=await db.passwordReset.findFirst({where:{userId:u.id,createdAt:{gte:new Date(Date.now()-60*1000)}},orderBy:{createdAt:'desc'}});
- if(recent)return res.json(resetResponse);
- const code=String(crypto.randomInt(0,1000000)).padStart(6,'0');
- const reset=await db.passwordReset.create({data:{userId:u.id,channel:b.channel,codeHash:resetHash(u.id,code),expiresAt:new Date(Date.now()+10*60*1000)}});
- try{await deliverReset(b.channel,to,code)}catch(e){await db.passwordReset.delete({where:{id:reset.id}});console.error('Password reset delivery failed:',e.message);return res.status(503).json({error:'Canal de recuperação indisponível. Tente outro canal ou contate o suporte.'})}
- res.json(resetResponse);
-}));
-async function validateReset(req,res){
- const b=req.body||{};if(!validResetInput(b)||!/^\d{6}$/.test(String(b.code||'')))return {error:'Dados de recuperação inválidos',status:400};
- const u=await db.user.findUnique({where:{cpf:digits(b.cpf)}});
- if(!u?.active)return {error:'Código inválido ou expirado',status:400};
- const r=await db.passwordReset.findFirst({where:{userId:u.id,channel:b.channel,usedAt:null},orderBy:{createdAt:'desc'}});
- if(!r||r.expiresAt<=new Date()||r.attempts>=5)return {error:'Código inválido ou expirado',status:400};
- const expected=Buffer.from(r.codeHash,'hex'),actual=Buffer.from(resetHash(u.id,String(b.code)),'hex');
- if(!crypto.timingSafeEqual(expected,actual)){
-  await db.passwordReset.updateMany({where:{id:r.id,usedAt:null},data:{attempts:{increment:1}}});return {error:'Código inválido ou expirado',status:400};
- }
- return {u,r};
-}
-app.post('/api/auth/password-reset/verify',limitReset,wrap(async(req,res)=>{const result=await validateReset(req,res);if(result.error)return res.status(result.status).json({error:result.error});res.json({ok:true})}));
-app.post('/api/auth/password-reset/confirm',limitReset,wrap(async(req,res)=>{
- const b=req.body||{};const password=String(b.newPassword||'');
- if(password.length<10||password.length>128)return res.status(400).json({error:'A senha deve ter entre 10 e 128 caracteres'});
- const result=await validateReset(req,res);if(result.error)return res.status(result.status).json({error:result.error});
- const hash=await bcrypt.hash(password,12);
- const changed=await db.$transaction(async tx=>{
-  const claim=await tx.passwordReset.updateMany({where:{id:result.r.id,usedAt:null,attempts:{lt:5},expiresAt:{gt:new Date()}},data:{usedAt:new Date()}});
-  if(!claim.count)return false;
-  await tx.user.update({where:{id:result.u.id},data:{passwordHash:hash,mustChangePassword:false}});
-  await tx.passwordReset.updateMany({where:{userId:result.u.id,usedAt:null},data:{usedAt:new Date()}});
-  return true;
- });
- if(!changed)return res.status(400).json({error:'Código inválido ou expirado'});
- res.json({ok:true});
-}));
+app.post('/api/login',wrap(async(req,res)=>{const cpf=digits(req.body.cpf),user=await db.user.findUnique({where:{cpf}});if(!user?.active||!await bcrypt.compare(String(req.body.password||''),user.passwordHash))return res.status(401).json({error:'CPF ou senha inválidos'});const token=issueToken(user);res.json({token,user:{id:user.id,name:user.name,role:user.role,mustChangePassword:user.mustChangePassword}})}));
+registerPasswordResetRoutes(app,{db,secret,hashPassword:password=>bcrypt.hash(password,12)});
 app.get('/api/me',auth,current,wrap(async(req,res)=>{const u=await db.user.findUnique({where:{id:req.auth.id},select:{id:true,name:true,role:true,cpf:true,mustChangePassword:true}});res.json(u)}));
 app.patch('/api/me/password',auth,current,wrap(async(req,res)=>{
  const old=String(req.body.currentPassword||''),password=String(req.body.newPassword||'');
  if(password.length<10||password===old)return res.status(400).json({error:'Nova senha deve ter ao menos 10 caracteres e ser diferente'});
  const u=await db.user.findUnique({where:{id:req.auth.id}});
  if(!await bcrypt.compare(old,u.passwordHash))return res.status(401).json({error:'Senha atual incorreta'});
- await db.user.update({where:{id:u.id},data:{passwordHash:await bcrypt.hash(password,12),mustChangePassword:false}});
- res.json({ok:true});
+ const updated=await db.user.update({where:{id:u.id},data:{passwordHash:await bcrypt.hash(password,12),mustChangePassword:false}});
+ res.json({ok:true,token:issueToken(updated)});
 }));
 app.patch('/api/me/profile',auth,current,wrap(async(req,res)=>{
  const u=await db.user.findUnique({where:{id:req.auth.id},include:{client:true}});

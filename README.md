@@ -37,7 +37,7 @@ Crie um projeto ou branch PostgreSQL **novo**, copie a URL de conexão para `DAT
 ## Notas importantes
 
 - Valores monetários são armazenados em centavos; a taxa de juros é percentual **mensal**. O cálculo Price é uma aproximação financeira de parcelas fixas com distribuição de centavos; revise regras contratuais e de arredondamento antes de uso jurídico/financeiro.
-- O CPF do cliente é usado como identificador de login. A senha inicial deve ser comunicada de forma segura; esta versão não implementa recuperação de senha.
+- O CPF do cliente é usado como identificador de login. A senha inicial deve ser comunicada de forma segura. A recuperação de senha por e-mail exige configurar o Resend e um remetente de domínio verificado; veja [RECUPERACAO-SENHA.md](RECUPERACAO-SENHA.md).
 - Os comprovantes ficam em `private-uploads` no disco local do servidor. **Em Render sem disco persistente, uploads podem desaparecer em redeploy.** Para uso real, substitua por armazenamento persistente (S3, R2 etc.) antes de receber documentos importantes.
 - Arquivos PDF/JPEG/PNG/WEBP de até 8 MB. A validação é baseada no MIME informado no upload; para produção sensível, implemente verificação de conteúdo e varredura de arquivos.
 - Não inclui emissão de boletos, assinatura digital, integração bancária nem notificações automáticas.

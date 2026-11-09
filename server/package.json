@@ -7,7 +7,7 @@
     "dev": "node --watch src/index.js",
     "db:push": "prisma db push",
     "seed": "node src/seed.js",
-    "test": "node --test tests/mp-signature.test.js tests/pix-confirmacao.test.js",
+    "test": "node --test tests/mp-signature.test.js tests/pix-confirmacao.test.js tests/password-reset.test.js tests/password-reset-http.test.js",
     "test:db": "node --test tests/pix-baixa.test.js"
   },
   "dependencies": {
