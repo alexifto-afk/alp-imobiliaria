@@ -6,7 +6,9 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "db:push": "prisma db push",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "test": "node --test tests/mp-signature.test.js tests/pix-confirmacao.test.js",
+    "test:db": "node --test tests/pix-baixa.test.js"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",

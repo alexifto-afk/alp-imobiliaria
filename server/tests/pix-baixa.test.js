@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
+import { confirmarPagamentoPix } from '../src/pix-confirmation.js';
 
 test('Pix aprovado atualiza a parcela no banco de testes', async () => {
   const url = process.env.TEST_DATABASE_URL;
@@ -63,21 +64,21 @@ test('Pix aprovado atualiza a parcela no banco de testes', async () => {
           installmentId: parcela.id,
           amount: 1000,
           idempotencyKey: crypto.randomUUID(),
-          providerId: crypto.randomUUID(),
+          providerId: '123456789',
           status: 'pending'
         }
       });
 
-      // Simula somente a resposta aprovada do provedor.
-      await tx.pixPayment.update({
-        where: { id: pix.id },
-        data: { status: 'approved', paidAt: new Date() }
-      });
-
-      await tx.installment.update({
-        where: { id: parcela.id },
-        data: { status: 'PAID' }
-      });
+      // Executa a mesma função de baixa usada pelo webhook e pela conciliação.
+      await confirmarPagamentoPix(tx, {
+        id: 123456789,
+        status: 'approved',
+        payment_method_id: 'pix',
+        currency_id: 'BRL',
+        external_reference: parcela.id,
+        transaction_amount: 10,
+        date_approved: new Date().toISOString()
+      }, pix);
 
       const resultado = await tx.installment.findUnique({
         where: { id: parcela.id }
@@ -94,5 +95,3 @@ test('Pix aprovado atualiza a parcela no banco de testes', async () => {
     await db.$disconnect();
   }
 });
-
-

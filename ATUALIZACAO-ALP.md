@@ -11,7 +11,7 @@
 - Cliente: modal Pix com botão de fechar; não exibe upload para parcela paga ou em análise; numeração `n/total`.
 - Perfil: nome, nascimento, e-mail e senha; CPF permanece como login.
 - Primeiro acesso: clientes novos são obrigados a trocar senha provisória antes de navegar.
-- Pix Mercado Pago: geração de cobrança Pix pela API, QR dinâmico, webhook com validação HMAC e confirmação por consulta à API; atualização de parcela e consulta periódica de status no modal.
+- Pix Mercado Pago: geração de cobrança Pix pela API, QR dinâmico, webhook com validação HMAC e confirmação por consulta à API; conciliação pelo modal e por rotina periódica para recuperar notificações perdidas. Veja `PIX-CONFIRMACAO.md`.
 
 ## Atenção: pagamentos reais desativados por padrão
 A variável `MP_PAYMENTS_ENABLED` deve permanecer `false` até validar integração e webhooks em ambiente isolado. O endpoint do Pix é `POST /api/my/installments/:id/pix`; webhook `POST /api/webhooks/mercadopago`.
@@ -39,7 +39,7 @@ As variáveis antigas `NUBANK_PIX_KEY`, `PIX_RECEIVER_NAME`, `PIX_RECEIVER_CITY`
 
 ## Segurança e limitações
 - A exclusão de registros com histórico financeiro é bloqueada para evitar perda de auditoria.
-- O pagamento só é considerado quitado após webhook assinado **e** consulta de confirmação na API do Mercado Pago.
+- O pagamento só é considerado quitado após consulta autenticada de confirmação na API do Mercado Pago, com conferência de ID, método Pix, moeda, referência e valor. O webhook exige assinatura válida; a consulta do cliente e a rotina periódica recuperam notificações perdidas.
 - O valor e a referência da cobrança são conferidos antes da baixa.
 - Não há envio automático de WhatsApp. O botão abre a mensagem pronta; para automação é necessária a WhatsApp Business Platform, consentimento e templates aprovados.
 - O projeto usa armazenamento local para arquivos de comprovantes; o disco efêmero do Render pode perder arquivos. Configure armazenamento persistente externo antes de produção.
