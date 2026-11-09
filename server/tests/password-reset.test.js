@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcryptjs';
-import {createPasswordReset,credentialVersion,validNewPassword} from '../src/password-reset.js';
+import {createPasswordReset,credentialVersion,validNewPassword,maskRecoveryEmail} from '../src/password-reset.js';
 import {resetDatabase} from './helpers/reset-database.js';
 
 const secret='segredo-ficticio-exclusivo-testes';
@@ -21,10 +21,19 @@ test('solicitação usa somente o e-mail cadastrado e não guarda código puro',
  assert.equal(memory.state.resets[0].codeHash.length,64);
  assert.equal(JSON.stringify(memory.state).includes('123456'),false);
  assert.equal(result.retryAfterSeconds,60);
+ assert.equal(result.emailHint,'cl***@e***.com');
+ assert.equal(JSON.stringify(result).includes('cliente@example.com'),false);
+});
+test('prévia mascara nomes curtos e domínio sem retornar endereço completo',()=>{
+ assert.equal(maskRecoveryEmail(' Maria.Silva@Gmail.com '),'ma***@g***.com');
+ assert.equal(maskRecoveryEmail('a@b.com'),'***@***.com');
+ assert.equal(maskRecoveryEmail('ab@gmail.com'),'a***@g***.com');
+ assert.equal(maskRecoveryEmail('invalido'),null);
 });
 test('CPF inexistente, conta inativa e conta sem e-mail têm a mesma resposta',async()=>{
  const {service,memory}=setup();
  const unknown=await service.request({cpf:'11111111111'});
+ assert.equal('emailHint' in unknown,false);
  memory.state.user.active=false;
  assert.deepEqual(await service.request({cpf}),unknown);
  memory.state.user.active=true;memory.state.user.client.email='';

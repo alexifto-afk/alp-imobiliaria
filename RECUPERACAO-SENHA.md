@@ -4,7 +4,7 @@
 
 Na tela de login, o cliente seleciona **Esqueci minha senha**, informa o CPF e recebe um código de seis dígitos no e-mail já cadastrado. O código expira em dez minutos, aceita no máximo cinco erros e só pode ser usado uma vez para redefinir a senha. É possível reenviar após 60 segundos; um novo código invalida o anterior.
 
-A tela não permite escolher outro destinatário. CPF inexistente, conta inativa e cadastro sem e-mail recebem a mesma resposta genérica. Quem perdeu acesso ao e-mail deve procurar a administração para conferir o cadastro. Administradores criados apenas pelo seed não possuem contato de cliente e não usam este fluxo.
+A tela não permite escolher outro destinatário. Na etapa do código, exibe uma prévia mascarada do e-mail cadastrado, por exemplo `ma***@g***.com`, para ajudar o cliente a reconhecer a caixa de destino. Essa prévia não confirma a entrega da mensagem. CPF inexistente, conta inativa e cadastro sem e-mail recebem a mesma resposta genérica, sem prévia. Quem perdeu acesso ao e-mail deve procurar a administração para conferir o cadastro. Administradores criados apenas pelo seed não possuem contato de cliente e não usam este fluxo.
 
 ## Por que usar a API do Gmail
 
