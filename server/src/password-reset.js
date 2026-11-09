@@ -9,6 +9,16 @@ const validCpf = value => /^\d{11}$/.test(digits(value));
 const lockUser = (tx, id) => tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))::text`;
 export const credentialVersion = (passwordHash, secret) => crypto.createHmac('sha256', secret).update(passwordHash).digest('hex');
 
+export function maskRecoveryEmail(email) {
+  const value = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return null;
+  const [local, domain] = value.split('@');
+  const visible = local.length > 3 ? local.slice(0, 2) : local.length > 1 ? local.slice(0, 1) : '';
+  const labels = domain.split('.');
+  const maskedDomain = labels.map((label, index) => index === labels.length - 1 ? label : (label.length > 1 ? label[0] : '') + '***').join('.');
+  return visible + '***@' + maskedDomain;
+}
+
 export function validNewPassword(value) {
   return typeof value === 'string' && value.length >= 10 && value.length <= 72 && Buffer.byteLength(value, 'utf8') <= 72;
 }
@@ -16,7 +26,7 @@ export function validNewPassword(value) {
 export function createPasswordReset({db, secret, hashPassword, sendEmail, now = () => Date.now(), randomCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0'), onDeliveryError = () => {}}) {
   const key = crypto.createHash('sha256').update(secret + ':alp-password-reset').digest();
   const hash = (id, code) => crypto.createHmac('sha256', key).update(id + ':' + code).digest('hex');
-  const response = () => ({ok: true, message: RESET_MESSAGE, retryAfterSeconds: 60, expiresInSeconds: 600});
+  const response = emailHint => ({ok: true, message: RESET_MESSAGE, retryAfterSeconds: 60, expiresInSeconds: 600, ...(emailHint ? {emailHint} : {})});
   function input(body) {
     if (!body || !validCpf(body.cpf) || (body.channel && body.channel !== 'EMAIL')) {
       throw Object.assign(new Error('Informe um CPF com 11 dígitos para recuperar por e-mail.'), {status: 400});
@@ -43,7 +53,7 @@ export function createPasswordReset({db, secret, hashPassword, sendEmail, now = 
         onDeliveryError(error.code || 'EMAIL_DELIVERY_FAILED');
       }
     }
-    return response();
+    return response(maskRecoveryEmail(email));
   }
   async function validate(tx, body, consume) {
     const user = await tx.user.findUnique({where: {cpf: digits(body.cpf)}});

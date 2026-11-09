@@ -8,6 +8,7 @@ export default function PasswordRecovery({request,initialCpf='',onBack,onSuccess
  const [confirmation,setConfirmation]=useState('');
  const [busy,setBusy]=useState(false);
  const [notice,setNotice]=useState('');
+ const [emailHint,setEmailHint]=useState('');
  const [error,setError]=useState('');
  const [seconds,setSeconds]=useState(0);
  const counting=seconds>0;
@@ -20,10 +21,11 @@ export default function PasswordRecovery({request,initialCpf='',onBack,onSuccess
  async function sendCode(event){
   event?.preventDefault();
   if(busy||seconds>0)return;
-  setBusy(true);setError('');
+  setBusy(true);setError('');setEmailHint('');
   try{
    const result=await request('/auth/password-reset/request','POST',{cpf,channel:'EMAIL'});
    setCode('');setPassword('');setConfirmation('');
+   setEmailHint(result.emailHint||'');
    setSeconds(result.retryAfterSeconds||60);setNotice(result.message);setStep('verify');
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
@@ -41,13 +43,14 @@ export default function PasswordRecovery({request,initialCpf='',onBack,onSuccess
   try{await request('/auth/password-reset/confirm','POST',{...data(),newPassword:password});onSuccess(cpf)}
   catch(e){setError(e.message)}finally{setBusy(false)}
  }
- function restart(){setStep('request');setCode('');setPassword('');setConfirmation('');setError('');setNotice('')}
+ function restart(){setStep('request');setCode('');setPassword('');setConfirmation('');setError('');setNotice('');setEmailHint('')}
  return <>
   <button className="alp-auth-back" type="button" disabled={busy} onClick={onBack}>← Voltar ao login</button>
   <span className="alp-auth-kicker">RECUPERAÇÃO DE ACESSO</span>
   <h2>{step==='request'?'Esqueceu sua senha?':step==='verify'?'Confira seu e-mail':'Crie uma nova senha'}</h2>
   <p className="alp-auth-description">{step==='request'?'Informe seu CPF. O código será enviado ao e-mail cadastrado na sua conta.':step==='verify'?'Digite o código de seis dígitos recebido por e-mail. Ele vale por 10 minutos.':'Escolha uma senha com pelo menos 10 caracteres.'}</p>
   {notice&&<div className="alp-auth-alert" role="status">{notice}</div>}
+  {step==='verify'&&emailHint&&<p className="alp-auth-description">E-mail de recuperação: <strong>{emailHint}</strong></p>}
   {error&&<div className="alp-auth-alert" role="alert">{error}</div>}
   {step==='request'?<form onSubmit={sendCode}>
    <label className="alp-auth-field"><span>CPF cadastrado</span><input required inputMode="numeric" autoComplete="username" pattern="[0-9]{11}" maxLength={14} disabled={busy} value={cpf} placeholder="Digite seu CPF" onChange={e=>setCpf(e.target.value.replace(/\D/g,'').slice(0,11))}/></label>
