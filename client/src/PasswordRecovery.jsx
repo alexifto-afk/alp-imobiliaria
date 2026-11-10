@@ -1,3 +1,4 @@
+import MaskedInput from './MaskedInput.jsx';
 import React,{useEffect,useState} from 'react';
 
 export default function PasswordRecovery({request,initialCpf='',onBack,onSuccess}){
@@ -53,7 +54,7 @@ export default function PasswordRecovery({request,initialCpf='',onBack,onSuccess
   {step==='verify'&&emailHint&&<p className="alp-auth-description">E-mail de recuperação: <strong>{emailHint}</strong></p>}
   {error&&<div className="alp-auth-alert" role="alert">{error}</div>}
   {step==='request'?<form onSubmit={sendCode}>
-   <label className="alp-auth-field"><span>CPF cadastrado</span><input required inputMode="numeric" autoComplete="username" pattern="[0-9]{11}" maxLength={14} disabled={busy} value={cpf} placeholder="Digite seu CPF" onChange={e=>setCpf(e.target.value.replace(/\D/g,'').slice(0,11))}/></label>
+   <label className="alp-auth-field"><span>CPF cadastrado</span><MaskedInput kind="cpf" required autoComplete="username" minLength={14} disabled={busy} value={cpf} placeholder="Digite seu CPF" onValueChange={setCpf}/></label>
    <button className="alp-auth-primary" disabled={busy||seconds>0}>{busy?'Enviando...':seconds>0?'Aguarde '+seconds+'s':'Enviar código por e-mail'}</button>
    <p className="alp-auth-help">Sem acesso ao e-mail cadastrado? Fale com a administração.</p>
   </form>:step==='verify'?<form onSubmit={verify}>

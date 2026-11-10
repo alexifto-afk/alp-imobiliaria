@@ -19,3 +19,10 @@
 .alp-first-access button{background:#4051d9;color:#fff}
 .alp-first-access button.secondary{background:#eef1ff;color:#4051d9}
 .alp-first-access .notice{background:#f0f3ff;color:#3b4fa7;border:1px solid #dce3ff}
+
+/* Cadastro de clientes: opções de sexo em uma única seleção. */
+.sex-options{border:0;padding:0;margin:0;min-width:0}
+.sex-options legend{padding:0;margin-bottom:8px}
+.sex-options>div{display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-height:45px}
+.sex-options label{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.sex-options.field input[type=radio]{width:16px;height:16px;min-height:0;margin:0;padding:0;accent-color:#4051d9}
