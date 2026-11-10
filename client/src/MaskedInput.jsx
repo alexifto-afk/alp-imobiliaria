@@ -1,11 +1,16 @@
 import React,{useLayoutEffect,useRef} from 'react';
 import {cpfDigits,phoneDigits,formatCpf,formatPhone,onlyDigits} from './form-format.js';
+import {isValidCpf} from './cpf.js';
 
-export default function MaskedInput({kind,value,onValueChange,...props}){
+export default function MaskedInput({kind,value,onValueChange,validateCpf=false,...props}){
  const input=useRef(null),caret=useRef(null);
  const normalize=kind==='phone'?phoneDigits:cpfDigits;
  const format=kind==='phone'?formatPhone:formatCpf;
  const displayed=format(value);
+ useLayoutEffect(()=>{
+  const invalid=validateCpf&&!props.disabled&&!props.readOnly&&String(value??'').trim()&&!isValidCpf(value);
+  input.current?.setCustomValidity(invalid?'CPF inválido. Confira os dígitos informados.':'');
+ },[validateCpf,value,props.disabled,props.readOnly]);
  useLayoutEffect(()=>{
   if(caret.current===null||!input.current)return;
   let count=0,position=0;
