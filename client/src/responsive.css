@@ -1,0 +1,106 @@
+/* Ajustes compartilhados para telas estreitas, Safari e áreas seguras. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body,#root{min-width:0}
+#root{width:100%;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+.shell,.login,.alp-auth,.alp-home{min-width:0;min-height:100vh;min-height:100svh}
+main,aside,.panel,.formgrid,.field,.search,.section-head,.hero,.modalbox,.alp-auth-card,.alp-auth-formside{min-width:0}
+.alp-admin-shell>main,.alp-client-shell>main{max-width:100%!important}
+.heading>div,.hero>div,.section-head>div{min-width:0}
+.heading h1,.hero h2,.hero p,.panel h2,.panel h3,.panel p,.modalhead h2,.alp-home-header h1,.alp-home-invoice small,.alp-bill-row h4,.alp-bill-row p,.alp-detail-main h2,.alp-muted{overflow-wrap:anywhere}
+.field input,.field select,.field textarea,.search input{min-width:0;max-width:100%}
+fieldset{min-inline-size:0}
+.actions,.report-actions{flex-wrap:wrap}
+.report-actions>button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.search{width:100%;max-width:480px}
+.search input{flex:1;min-width:0}
+.tablewrap,.calendar{width:100%;min-width:0;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.alp-admin-shell>aside nav{min-width:0;max-width:100%;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.barrow>div:first-child{flex-wrap:wrap}
+.barrow>div:first-child>*{min-width:0;overflow-wrap:anywhere}
+.modalback{overflow:auto;overscroll-behavior:contain;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.modalbox{max-width:100%;max-height:90vh;max-height:calc(100dvh - max(12px,env(safe-area-inset-top,0px)) - max(12px,env(safe-area-inset-bottom,0px)));overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.modalhead{align-items:flex-start}
+.modalhead h2{min-width:0}
+.modalhead>button{flex-shrink:0;min-width:44px;min-height:44px}
+.modalbox .panel{min-width:0;max-width:100%}
+.pixpanel img{width:min(260px,100%);height:auto}
+.pixpanel textarea{min-width:0;max-width:100%;box-sizing:border-box}
+.alp-home-header{grid-template-columns:minmax(0,1fr) auto}
+.alp-home-brand strong,.alp-home-invoice-title h2{min-width:0;overflow-wrap:anywhere}
+.alp-home-mark,.alp-home-profile{flex-shrink:0}
+.alp-home-price,.alp-total strong{max-width:100%;overflow-wrap:anywhere}
+.alp-bill-bottom{flex-wrap:wrap}
+.alp-bill-bottom strong{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.alp-bill-bottom button{max-width:100%;white-space:normal}
+.alp-client-topbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto}
+.alp-client-topbar strong{min-width:0;text-align:center;overflow-wrap:anywhere}
+.alp-doc-header>div{min-width:0}
+.alp-doc-logo{flex-shrink:0}
+.alp-doc-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+.alp-doc-overview{grid-template-columns:repeat(3,minmax(0,1fr))}
+.alp-doc-overview strong,.alp-doc-total strong{overflow-wrap:anywhere}
+.alp-doc-table{table-layout:fixed;white-space:normal}
+.alp-doc-table th,.alp-doc-table td{overflow-wrap:anywhere}
+.alp-doc-total{flex-wrap:wrap}
+.alp-report-actions button{max-width:100%;white-space:normal}
+.alp-auth,.alp-auth-showcase,.alp-auth-formside,.alp-auth-card{max-width:100%}
+.alp-auth-pitch h1,.alp-auth-description,.alp-auth-alert{overflow-wrap:anywhere}
+
+/* Safari mantém a escala ao focar campos em celulares e tablets. */
+@media(hover:none) and (pointer:coarse){
+ input:not([type=radio]):not([type=checkbox]),select,textarea{font-size:16px!important}
+ .alp-auth .alp-auth-field input:not([type=radio]){font-size:16px!important}
+}
+
+@media(min-width:761px){.alp-admin-shell>aside{height:100vh;height:100svh}}
+@media(max-width:850px){
+ .alp-auth-formside{min-height:100vh;min-height:100svh;padding-top:max(24px,env(safe-area-inset-top,0px));padding-bottom:max(24px,env(safe-area-inset-bottom,0px))}
+}
+@media(max-width:760px){
+ input:not([type=radio]):not([type=checkbox]),select,textarea{font-size:16px!important}
+ .alp-auth-field input:not([type=radio]){font-size:16px!important}
+ .alp-admin-shell>aside{grid-template-columns:49px minmax(0,1fr) auto;padding-top:calc(15px + env(safe-area-inset-top,0px))}
+ .alp-admin-shell>aside h2,.alp-admin-shell>aside small{overflow-wrap:anywhere}
+ .alp-admin-shell>main{padding:18px 12px calc(35px + env(safe-area-inset-bottom,0px))!important}
+ .alp-admin-shell .heading{gap:12px}
+ .alp-admin-shell .heading .tag{flex-shrink:0}
+ .alp-admin-shell .formgrid,.formgrid{grid-template-columns:minmax(0,1fr)}
+ .actions>button,.report-actions>button{flex:1 1 150px;min-height:44px;max-width:100%;white-space:normal}
+ .nav,.small,.alp-back,.alp-client-topbar button,.alp-bill-bottom button{min-height:44px}
+ .section-head input{max-width:100%;min-width:0}
+ .login{padding-top:calc(20px + env(safe-area-inset-top,0px));padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+ .loginform{min-width:0;max-width:100%}
+ .alp-client-shell .profile{width:100%;min-width:0;padding:20px 16px calc(24px + env(safe-area-inset-bottom,0px))}
+ .alp-client-shell>main>.notice{max-width:calc(100% - 24px);overflow-wrap:anywhere}
+ .alp-home-header{padding-top:calc(28px + env(safe-area-inset-top,0px))}
+ .alp-home-invoice-title{align-items:flex-start}
+ .alp-home-price{font-size:clamp(28px,8vw,42px)}
+ .alp-total strong{font-size:clamp(30px,9vw,44px)}
+ .alp-home-buttons>button{flex:1 1 130px;min-width:0;white-space:normal}
+ .alp-home-shortcuts{min-width:0;max-width:100%;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+ .alp-home-shortcuts>button{flex:0 0 174px}
+ .alp-home-body{padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+ .alp-client-topbar{padding:12px;gap:8px}
+ .alp-client-topbar button{padding:9px 10px}
+ .alp-detail-header{grid-template-columns:44px minmax(0,1fr) 44px;padding:16px 12px}
+ .alp-detail-header strong{font-size:clamp(17px,4.7vw,21px);overflow-wrap:anywhere}
+ .alp-detail-main{min-width:0;padding-left:16px;padding-right:16px}
+ .alp-items{padding:18px 14px}
+ .alp-items>div{flex-wrap:wrap;overflow-wrap:anywhere}
+ .alp-detail-footer{padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+ .alp-report-actions>button{flex:1 1 160px}
+ .modalback{align-items:flex-start}
+}
+@media(max-width:380px){
+ .alp-admin-shell .stats{grid-template-columns:minmax(0,1fr)!important}
+ .alp-home-header{padding-left:14px;padding-right:14px}
+ .alp-home-brand{font-size:15px;gap:8px}
+ .alp-home-brand-icon,.alp-home-profile{width:44px;height:44px}
+ .alp-home-invoice{padding-left:18px;padding-right:18px}
+ .alp-home-invoice-title h2{font-size:22px}
+ .alp-doc-fields,.alp-doc-overview{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-height:500px){
+ .alp-auth-formside{justify-content:flex-start;padding-top:16px}
+ .alp-auth-card-brand{margin-bottom:18px}
+}
