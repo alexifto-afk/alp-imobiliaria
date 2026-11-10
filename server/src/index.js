@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import PDFDocument from 'pdfkit';
+import {registerClientWriteRoutes} from './client-write-routes.js';
 import {credentialVersion} from './password-reset.js';
 import {registerPasswordResetRoutes} from './password-reset-routes.js';
 import {validMpSignature} from './mp-signature.js';
@@ -43,8 +44,7 @@ app.get('/api/me/profile',auth,current,wrap(async(req,res)=>{
 }));
 app.get('/api/clients',auth,current,admin,wrap(async(_q,res)=>res.json(await db.client.findMany({include:{user:{select:{id:true,name:true,cpf:true,active:true}}},orderBy:{user:{name:'asc'}}}))));
 const clientFields=b=>({phone:optional(b.phone),email:optional(b.email),rg:optional(b.rg),birthDate:b.birthDate?new Date(`${b.birthDate}T00:00:00.000Z`):null,sex:optional(b.sex),maritalStatus:optional(b.maritalStatus),spouseName:optional(b.spouseName),spouseCpf:optional(b.spouseCpf)});
-app.post('/api/clients',auth,current,admin,wrap(async(req,res)=>{const b=req.body,cpf=digits(b.cpf);if(!/^\d{11}$/.test(cpf)||!txt(b.name))return res.status(400).json({error:'Nome e CPF de 11 dígitos são obrigatórios'});const password=String(b.password||'');if(password.length<8)return res.status(400).json({error:'Senha precisa ter ao menos 8 caracteres'});const out=await db.user.create({data:{name:txt(b.name),cpf,passwordHash:await bcrypt.hash(password,12),role:'CLIENT',mustChangePassword:true,client:{create:clientFields(b)}},include:{client:true}});res.status(201).json({id:out.client.id})}));
-app.put('/api/clients/:id',auth,current,admin,wrap(async(req,res)=>{const b=req.body,c=await db.client.findUnique({where:{id:req.params.id}});if(!c)return res.status(404).json({error:'Cliente não encontrado'});await db.$transaction([db.user.update({where:{id:c.userId},data:{name:txt(b.name),cpf:digits(b.cpf)}}),db.client.update({where:{id:c.id},data:clientFields(b)})]);res.json({ok:true})}));
+registerClientWriteRoutes(app,{db,hashPassword:password=>bcrypt.hash(password,12),clientFields,auth,current,admin});
 app.patch('/api/clients/:id/status',auth,current,admin,wrap(async(req,res)=>{const c=await db.client.findUnique({where:{id:req.params.id}});if(!c)return res.status(404).json({error:'Cliente não encontrado'});await db.user.update({where:{id:c.userId},data:{active:req.body.active===true}});res.json({ok:true})}));
 app.delete('/api/clients/:id',auth,current,admin,wrap(async(req,res)=>{
  const c=await db.client.findUnique({where:{id:req.params.id},include:{_count:{select:{contracts:true}}}});
