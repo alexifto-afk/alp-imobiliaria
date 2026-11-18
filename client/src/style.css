@@ -36,3 +36,5 @@
 .notification-due{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px;background:#eef1ff;border-radius:12px}
 .notification-due strong{flex:1 1 180px;min-width:0;font-size:15px}
 .profile .notification-settings{margin:16px 0}
+
+.alp-auth-public-links{text-align:center;font-size:13px;line-height:1.6;margin-top:12px}.alp-auth-public-links a{color:#4051b0;text-underline-offset:3px}.alp-auth-public-links a:focus-visible{outline:2px solid #4051d9;outline-offset:3px}
