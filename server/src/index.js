@@ -1,5 +1,8 @@
 import 'dotenv/config';
 import PDFDocument from 'pdfkit';
+import webPush from 'web-push';
+import {registerNotificationRoutes} from './notification-routes.js';
+import {createPushSender} from './notifications.js';
 import {registerClientWriteRoutes} from './client-write-routes.js';
 import {credentialVersion} from './password-reset.js';
 import {registerPasswordResetRoutes} from './password-reset-routes.js';
@@ -21,6 +24,7 @@ const current=wrap(async(req,res,next)=>{const u=await db.user.findUnique({where
 app.get('/api/health',(_q,r)=>r.json({ok:true}));
 app.post('/api/login',wrap(async(req,res)=>{const cpf=digits(req.body.cpf),user=await db.user.findUnique({where:{cpf}});if(!user?.active||!await bcrypt.compare(String(req.body.password||''),user.passwordHash))return res.status(401).json({error:'CPF ou senha inválidos'});const token=issueToken(user);res.json({token,user:{id:user.id,name:user.name,role:user.role,mustChangePassword:user.mustChangePassword}})}));
 registerPasswordResetRoutes(app,{db,secret,hashPassword:password=>bcrypt.hash(password,12)});
+registerNotificationRoutes(app,{db,auth,current,sendPush:createPushSender(process.env,webPush)});
 app.get('/api/me',auth,current,wrap(async(req,res)=>{const u=await db.user.findUnique({where:{id:req.auth.id},select:{id:true,name:true,role:true,cpf:true,mustChangePassword:true}});res.json(u)}));
 app.patch('/api/me/password',auth,current,wrap(async(req,res)=>{
  const old=String(req.body.currentPassword||''),password=String(req.body.newPassword||'');

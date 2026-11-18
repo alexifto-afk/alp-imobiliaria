@@ -66,3 +66,7 @@ Para confirmação automática segura, contratar/habilitar um PSP com API de cob
 
 ### Publicação
 Crie um repositório GitHub novo, envie o conteúdo desta pasta mantendo `client/` e `server/` na raiz. Configure Vercel com root `client`, Render com root `server`, PostgreSQL Neon, `DATABASE_URL`, `JWT_SECRET` e `CLIENT_ORIGIN`. Execute `npx prisma db push` no banco **novo** e crie o usuário admin com as instruções do seed. Teste login, parcelas e aprovação antes de produção.
+
+## Lembretes no celular
+
+Consulte [NOTIFICACOES.md](NOTIFICACOES.md) para ativar notificações de vencimento às 12h (Brasília), incluindo banco Neon, variáveis do Render, agendador externo e instalação no iPhone.

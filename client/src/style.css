@@ -26,3 +26,13 @@
 .sex-options>div{display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-height:45px}
 .sex-options label{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
 .sex-options.field input[type=radio]{width:16px;height:16px;min-height:0;margin:0;padding:0;accent-color:#4051d9}
+
+.notification-settings{margin:16px 12px;padding:20px;border:1px solid #dce3f7;border-radius:18px;background:#fff;color:#243557;overflow-wrap:anywhere}
+.notification-settings h2{font-size:19px;margin:0 0 10px;color:#243557}
+.notification-settings p{font-size:14px;line-height:1.6;margin:10px 0}
+.notification-settings small{display:block;font-size:12px;color:#68758a;margin-top:12px;line-height:1.5}
+.notification-settings button{background:#4051d9;color:#fff;max-width:100%;white-space:normal;min-height:44px}
+.notification-settings button.secondary{background:#eef1ff;color:#4051d9}
+.notification-due{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px;background:#eef1ff;border-radius:12px}
+.notification-due strong{flex:1 1 180px;min-width:0;font-size:15px}
+.profile .notification-settings{margin:16px 0}
