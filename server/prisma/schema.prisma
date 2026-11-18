@@ -30,6 +30,7 @@ model User {
   mustChangePassword Boolean @default(false)
   createdAt    DateTime @default(now())
   passwordResets PasswordReset[]
+  pushSubscriptions PushSubscription[]
   client       Client?
 }
 model Client {
@@ -129,4 +130,35 @@ model PasswordReset {
   usedAt DateTime?
   createdAt DateTime @default(now())
   @@index([userId, channel, createdAt])
+}
+
+model PushSubscription {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpointHash String @unique
+  endpoint String @db.Text
+  p256dh String
+  auth String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  lastSuccessAt DateTime?
+  deliveries NotificationDelivery[]
+  @@index([userId, active])
+}
+
+model NotificationDelivery {
+  id String @id @default(cuid())
+  subscriptionId String
+  subscription PushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  day String
+  status String @default("PENDING")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedUntil DateTime?
+  leaseToken String?
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([subscriptionId, day])
+  @@index([day, status, nextAttemptAt])
 }

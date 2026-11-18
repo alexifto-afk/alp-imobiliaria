@@ -7,8 +7,9 @@
     "dev": "node --watch src/index.js",
     "db:push": "prisma db push",
     "seed": "node src/seed.js",
-    "test": "node --test tests/mp-signature.test.js tests/pix-confirmacao.test.js tests/password-reset.test.js tests/password-reset-http.test.js tests/gmail-email.test.js tests/cpf.test.js tests/client-cpf-http.test.js",
-    "test:db": "node --test tests/pix-baixa.test.js"
+    "test": "node --test tests/mp-signature.test.js tests/pix-confirmacao.test.js tests/password-reset.test.js tests/password-reset-http.test.js tests/gmail-email.test.js tests/cpf.test.js tests/client-cpf-http.test.js tests/notifications.test.js tests/notification-routes.test.js",
+    "test:db": "node --test tests/pix-baixa.test.js",
+    "push:keys": "node scripts/generate-notification-keys.js"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",
@@ -20,6 +21,7 @@
     "multer": "^1.4.5-lts.1",
     "pdfkit": "^0.20.2",
     "qrcode": "^1.5.4",
+    "web-push": "^3.6.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {
