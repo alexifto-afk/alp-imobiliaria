@@ -1,3 +1,4 @@
+import {registerCompanyRoutes,getCompany} from './company-settings.js';
 import 'dotenv/config';
 import PDFDocument from 'pdfkit';
 import webPush from 'web-push';
@@ -9,7 +10,7 @@ import {registerPasswordResetRoutes} from './password-reset-routes.js';
 import {validMpSignature} from './mp-signature.js';
 import {confirmarPagamentoPix,reconciliarCobranca,reconciliarParcela,reconciliarPendentes} from './pix-confirmation.js';
 import express from 'express';import cors from 'cors';import bcrypt from 'bcryptjs';import jwt from 'jsonwebtoken';import multer from 'multer';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {PrismaClient} from '@prisma/client';
-const db=new PrismaClient(),app=express();app.disable('x-powered-by');app.use(express.json({limit:'100kb'}));
+const db=new PrismaClient(),app=express();app.disable('x-powered-by');app.use((req,res,next)=>(req.path==='/api/company'&&req.method==='PUT'?express.json({limit:'3mb'}):express.json({limit:'100kb'}))(req,res,next));
 // Render encaminha requisições por proxy; permite limitar pelo IP do cliente.
 app.set('trust proxy',process.env.NODE_ENV==='production'?1:false);
 const origins=(process.env.CLIENT_ORIGIN||'http://localhost:5173').split(',').map(s=>s.trim());app.use(cors({origin:(origin,cb)=>cb(null,!origin||origins.includes(origin))}));
@@ -21,6 +22,7 @@ const cents=v=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<0)throw Error('
 const auth=(req,res,next)=>{try{const token=(req.headers.authorization||'').replace(/^Bearer\s+/i,'');req.auth=jwt.verify(token,secret);next()}catch{res.status(401).json({error:'Sessão inválida ou expirada'})}};
 const admin=(req,res,next)=>req.auth.role==='ADMIN'?next():res.status(403).json({error:'Acesso restrito'});
 const current=wrap(async(req,res,next)=>{const u=await db.user.findUnique({where:{id:req.auth.id}});if(!u?.active)return res.status(401).json({error:'Conta inativa'});if(req.auth.cv!==credentialVersion(u.passwordHash,secret))return res.status(401).json({error:'Sua sessão expirou. Entre novamente.'});req.auth.role=u.role;req.auth.mustChangePassword=u.mustChangePassword;if(u.mustChangePassword&&!['/api/me','/api/me/password'].includes(req.path))return res.status(403).json({error:'Altere sua senha provisória antes de continuar'});next()});
+registerCompanyRoutes(app,{db,auth,current,admin});
 app.get('/api/health',(_q,r)=>r.json({ok:true}));
 app.post('/api/login',wrap(async(req,res)=>{const cpf=digits(req.body.cpf),user=await db.user.findUnique({where:{cpf}});if(!user?.active||!await bcrypt.compare(String(req.body.password||''),user.passwordHash))return res.status(401).json({error:'CPF ou senha inválidos'});const token=issueToken(user);res.json({token,user:{id:user.id,name:user.name,role:user.role,mustChangePassword:user.mustChangePassword}})}));
 registerPasswordResetRoutes(app,{db,secret,hashPassword:password=>bcrypt.hash(password,12)});
@@ -146,7 +148,7 @@ app.post('/api/my/installments/:id/pix',auth,current,wrap(async(req,res)=>{
  if(!p.providerId){
   const email=txt(i.contract.client.email);
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:'Cadastre um e-mail válido no perfil antes de pagar'});
-  const payment=await mpCall('/v1/payments',{method:'POST',headers:{'X-Idempotency-Key':p.idempotencyKey},body:JSON.stringify({transaction_amount:i.amount/100,description:`ALP Imobiliária - parcela ${i.number}/${i.contract.installmentCount}`,payment_method_id:'pix',payer:{email},external_reference:i.id,notification_url:process.env.MP_WEBHOOK_URL||undefined})});
+  const payment=await mpCall('/v1/payments',{method:'POST',headers:{'X-Idempotency-Key':p.idempotencyKey},body:JSON.stringify({transaction_amount:i.amount/100,description:`${(await getCompany(db)).name} - parcela ${i.number}/${i.contract.installmentCount}`,payment_method_id:'pix',payer:{email},external_reference:i.id,notification_url:process.env.MP_WEBHOOK_URL||undefined})});
   if(!/^\d+$/.test(String(payment.id)))throw Object.assign(Error('Mercado Pago não retornou uma cobrança válida. Tente novamente.'),{status:502});
   const tx=payment.point_of_interaction?.transaction_data||{};
   p=await db.pixPayment.update({where:{id:p.id},data:{providerId:String(payment.id),qrCode:tx.qr_code||null,qrBase64:tx.qr_code_base64||null}});
@@ -205,7 +207,8 @@ app.get('/api/installments/:id/receipt-pdf',auth,current,wrap(async(req,res)=>{
   const paidAt=payment?.paidAt||receipt?.reviewedAt||null;
   const money=n=>(Number(n||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const dt=d=>d?new Date(d).toLocaleDateString('pt-BR',{timeZone:'UTC'}):'Não informada';
-  const pdf=new PDFDocument({size:'A4',margin:0,info:{Title:'Comprovante de Pagamento - A.L.P Imobiliária',Author:'A.L.P Imobiliária'}});
+  const company=await getCompany(db);
+  const pdf=new PDFDocument({size:'A4',margin:0,info:{Title:'Comprovante de Pagamento - '+company.name,Author:company.name}});
   res.status(200).type('application/pdf');
   res.setHeader('Content-Disposition',`attachment; filename="recibo-alp-parcela-${installment.number}.pdf"`);
   pdf.on('error',e=>{console.error('Erro ao gerar comprovante:',e);res.destroy(e)});
@@ -216,7 +219,7 @@ app.get('/api/installments/:id/receipt-pdf',auth,current,wrap(async(req,res)=>{
   const pair=(left,right,y)=>{label(left[0],48,y);value(left[1],48,y+17,245);label(right[0],320,y);value(right[1],320,y+17,228)};
   pdf.fillColor(navy).font('Helvetica-Bold').fontSize(20).text('Comprovante de Pagamento',48,62,{width:380});
   pdf.fillColor(gray).font('Helvetica').fontSize(9).text('Emitido em '+dt(new Date()),48,92);
-  pdf.image(Buffer.from(ALP_RECEIPT_LOGO_BASE64,'base64'),423,49,{fit:[113,78],align:'center',valign:'center'});
+  pdf.image(Buffer.from(company.logo?company.logo.split(',')[1]:ALP_RECEIPT_LOGO_BASE64,'base64'),423,49,{fit:[113,78],align:'center',valign:'center'});
   pdf.moveTo(48,141).lineTo(547,141).strokeColor(rule).lineWidth(.8).stroke();
   pair(['Número do recibo',receipt?.id||payment?.id||installment.id],['Identificação da transação',payment?.providerId||'Não informada'],163);
   pair(['Nome do cliente',contract.client.user.name],['CPF do cliente',contract.client.user.cpf],222);
@@ -234,7 +237,7 @@ app.get('/api/installments/:id/receipt-pdf',auth,current,wrap(async(req,res)=>{
   pdf.fillColor(gray).fontSize(9).text('Total recebido',345,552,{width:190,align:'right'});
   pdf.fillColor(navy).font('Helvetica-Bold').fontSize(19).text(money(installment.amount),345,572,{width:190,align:'right'});
   pdf.moveTo(150,690).lineTo(445,690).strokeColor(gold).lineWidth(.9).stroke();
-  pdf.fillColor(navy).font('Helvetica-Bold').fontSize(11).text('A.L.P Imobiliária',150,705,{width:295,align:'center'});
+  pdf.fillColor(navy).font('Helvetica-Bold').fontSize(11).text(company.name,150,705,{width:295,height:16,ellipsis:true,align:'center'});
   pdf.fillColor(gray).font('Helvetica').fontSize(8).text('Comprovante referente ao pagamento identificado acima.',95,735,{width:405,align:'center'});
   pdf.end();
 }));

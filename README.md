@@ -70,3 +70,7 @@ Crie um repositório GitHub novo, envie o conteúdo desta pasta mantendo `client
 ## Lembretes no celular
 
 Consulte [NOTIFICACOES.md](NOTIFICACOES.md) para ativar notificações de vencimento às 12h (Brasília), incluindo banco Neon, variáveis do Render, agendador externo e instalação no iPhone.
+
+## Identidade da empresa e suporte
+
+Administradores podem configurar nome e logomarca na aba Configurações. Consulte [CONFIGURACOES-EMPRESA.md](CONFIGURACOES-EMPRESA.md) para criar a tabela no Neon e publicar a alteração. O contato de suporte técnico aparece no rodapé do sistema e das páginas públicas.

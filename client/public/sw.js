@@ -5,7 +5,8 @@ self.addEventListener('push',event=>{
  let data={};try{data=event.data?.json()||{}}catch{}
  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
  const today=parts.year+'-'+parts.month+'-'+parts.day;
- event.waitUntil(self.registration.showNotification('A.L.P Imobiliária',{
+ const companyName=typeof data.companyName==='string'&&data.companyName.trim()&&data.companyName.length<=80?data.companyName:'A.L.P Imobiliária';
+ event.waitUntil(self.registration.showNotification(companyName,{
   body:data.day===today?'Você tem parcela com vencimento hoje. Abra o app para consultar e pagar.':'Abra o app para consultar suas parcelas e pagamentos.',
   icon:'/icons/icon-192.png',badge:'/icons/icon-192.png',tag:'due-'+(data.day||today),
   data:{url:'/?view=installments'}

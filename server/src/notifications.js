@@ -1,3 +1,4 @@
+import {getCompany} from './company-settings.js';
 import crypto from 'node:crypto';
 
 export const REMINDER_HOUR=12;
@@ -68,7 +69,8 @@ export async function sendDueNotifications({db,sendPush,now=new Date()}){
    const current=await db.pushSubscription.findUnique({where:{id:subscription.id},include:{user:{select:{active:true,role:true}}}});
    const count=current?.active&&current.user?.active&&current.user.role==='CLIENT'?await db.installment.count({where:{...due,contract:{client:{userId:current.userId}}}}):0;
    if(!count){await finish({status:'SKIPPED'});summary.skipped++;continue}
-   const payload={title:'A.L.P Imobiliária',body:'Você tem parcela com vencimento hoje. Abra o app para consultar e pagar.',day,url:'/?view=installments',tag:'due-'+day};
+   const company=await getCompany(db);
+   const payload={companyName:company.name,title:company.name,body:'Você tem parcela com vencimento hoje. Abra o app para consultar e pagar.',day,url:'/?view=installments',tag:'due-'+day};
    // O vencimento é uma data de calendário; o aviso expira até a meia-noite em Brasília.
    const ttl=Math.max(1,Math.min(43200,Math.floor((Date.parse(day+'T23:59:59-03:00')-now.getTime())/1000)));
    await sendPush(current,payload,ttl);

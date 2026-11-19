@@ -162,3 +162,10 @@ model NotificationDelivery {
   @@unique([subscriptionId, day])
   @@index([day, status, nextAttemptAt])
 }
+
+model CompanySetting {
+  id String @id @default("main")
+  name String
+  logo String? @db.Text
+  updatedAt DateTime @updatedAt
+}
