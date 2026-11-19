@@ -1,3 +1,4 @@
+import {getCompany} from './company-settings.js';
 import {createPasswordReset} from './password-reset.js';
 import {createEmailSender,emailConfigured} from './gmail-email.js';
 
@@ -12,7 +13,7 @@ export function registerPasswordResetRoutes(app,{db,secret,hashPassword,env=proc
   if(limits.size>10000)for(const [key,times]of limits)if(times.every(t=>now-t>15*60*1000))limits.delete(key);
   next();
  }
- const service=createPasswordReset({db,secret,hashPassword,sendEmail:createEmailSender({env,fetchImpl}),onDeliveryError});
+ const service=createPasswordReset({db,secret,hashPassword,sendEmail:createEmailSender({env,fetchImpl,getCompanyName:async()=>(await getCompany(db)).name}),onDeliveryError});
  function ready(req,res,next){
   if(emailConfigured(env))return next();
   res.status(503).json({error:'A recuperação por e-mail ainda não está disponível. Entre em contato com a administração.'});

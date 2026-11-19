@@ -6,15 +6,15 @@ export function emailConfigured(env) {
   return mailbox(trim(env.GMAIL_USER)) && ['GMAIL_CLIENT_ID','GMAIL_CLIENT_SECRET','GMAIL_REFRESH_TOKEN'].every(key => Boolean(trim(env[key])));
 }
 
-function message(from, to, code) {
+function message(from, to, code, companyName='A.L.P Imobiliária') {
   if (!mailbox(from) || !mailbox(to) || !/^\d{6}$/.test(code)) throw failure('GMAIL_INVALID_MESSAGE');
   const encoded = text => '=?UTF-8?B?' + Buffer.from(text, 'utf8').toString('base64') + '?=';
   const text = `Seu código de recuperação é ${code}. Ele expira em 10 minutos. Se você não solicitou a recuperação, ignore esta mensagem. Não compartilhe este código.`;
   const body = Buffer.from(text, 'utf8').toString('base64').match(/.{1,76}/g).join('\r\n');
   return Buffer.from([
-    'From: ' + encoded('A.L.P Imobiliária') + ' <' + from + '>',
+    'From: ' + encoded(companyName) + ' <' + from + '>',
     'To: <' + to + '>',
-    'Subject: ' + encoded('A.L.P Imobiliária — recuperação de senha'),
+    'Subject: ' + encoded(companyName+' — recuperação de senha'),
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
@@ -23,7 +23,7 @@ function message(from, to, code) {
 }
 
 // HTTPS, compatível com Render gratuito. Não usa SMTP nem senha de app.
-export function createEmailSender({env, fetchImpl = fetch, now = () => Date.now()}) {
+export function createEmailSender({env, fetchImpl = fetch, now = () => Date.now(), getCompanyName = async () => 'A.L.P Imobiliária'}) {
   let cached = null;
   let refreshing = null;
   async function accessToken() {
@@ -50,7 +50,7 @@ export function createEmailSender({env, fetchImpl = fetch, now = () => Date.now(
   }
   return async (to, code) => {
     if (!emailConfigured(env)) throw failure('GMAIL_NOT_CONFIGURED');
-    const raw = message(trim(env.GMAIL_USER), to, code);
+    const raw = message(trim(env.GMAIL_USER), to, code, await getCompanyName());
     for (let attempt = 0; attempt < 2; attempt++) {
       const token = await accessToken();
       let response;

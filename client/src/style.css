@@ -38,3 +38,9 @@
 .profile .notification-settings{margin:16px 0}
 
 .alp-auth-public-links{text-align:center;font-size:13px;line-height:1.6;margin-top:12px}.alp-auth-public-links a{color:#4051b0;text-underline-offset:3px}.alp-auth-public-links a:focus-visible{outline:2px solid #4051d9;outline-offset:3px}
+
+/* Identidade configurável e contato técnico */
+.company-settings{max-width:760px}.company-settings form{display:grid;gap:16px}.company-settings input[type=file]{max-width:100%;white-space:normal}.company-logo-preview{display:block;width:240px;max-width:100%;height:160px;object-fit:contain;border:1px solid #e0e5f0;border-radius:12px;background:#fff}.company-sidebar-logo{overflow:hidden;background:#fff!important;padding:3px!important}.company-sidebar-logo img{width:100%;height:100%;object-fit:contain}.technical-support{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 20px;padding:18px 16px;color:#52607a;background:#f6f8fc;font-size:13px;line-height:1.6;text-align:center}.technical-support a{color:#3547c2;overflow-wrap:anywhere;text-underline-offset:3px}.alp-home-mark{max-width:160px;overflow-wrap:anywhere;font-size:12px!important}.company-settings .actions{flex-wrap:wrap}.company-settings input{min-width:0}@media(max-width:480px){.company-settings .actions>*{width:100%}.technical-support{flex-direction:column}.alp-home-brand strong{font-size:14px;overflow-wrap:anywhere}.alp-auth-foot{overflow-wrap:anywhere}}
+
+.alp-home-brand-icon img{width:100%;height:100%;object-fit:contain;border-radius:8px;background:white}.alp-admin-shell>aside>h2,.alp-client-shell>aside>h2{overflow-wrap:anywhere}.alp-client-topbar strong{overflow-wrap:anywhere;min-width:0}
+.alp-admin-shell .heading>div{min-width:0}.alp-admin-shell .heading small{overflow-wrap:anywhere;white-space:normal}

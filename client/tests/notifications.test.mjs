@@ -17,5 +17,6 @@ test('service worker não aceita dados financeiros nem redirecionamento externo 
  handlers.push({data:{json:()=>({title:'CPF privado',body:'valor privado',url:'https://evil.example',day:'2000-01-01'})},waitUntil});await pending;
  assert.equal(shown[0][0],'A.L.P Imobiliária');assert.doesNotMatch(JSON.stringify(shown),/privado|evil/);assert.match(shown[0][1].body,/consultar/);
  handlers.notificationclick({notification:{close(){}},waitUntil});await pending;assert.equal(opened[0],'https://alp.example/?view=installments');
+ handlers.push({data:{json:()=>({companyName:'Empresa Nova'})},waitUntil});await pending;assert.equal(shown.at(-1)[0],'Empresa Nova');
  assert.equal(handlers.fetch,undefined);
 });
