@@ -25,7 +25,7 @@ export function Calendar({month,installments,onSelect,onSelectDay}){
  })}</div></div>;
 }
 function Field({label,children}){return <div><dt>{label}</dt><dd>{children??'Não informado'}</dd></div>}
-export function CalendarDebtDialog({selection,installments,onSelect,onClose,whatsappLink}){
+export function CalendarDebtDialog({selection,installments,onSelect,onClose,whatsappLink,onManualReceiptToggle,manualReceiptBusy}){
  const dialog=useRef(null),heading=useRef(null);
  useLayoutEffect(()=>{
   const element=dialog.current,previous=document.body.style.overflow,previousFocus=document.activeElement;
@@ -38,7 +38,7 @@ export function CalendarDebtDialog({selection,installments,onSelect,onClose,what
  const title=selection.type==='day'?'Parcelas de '+date(selection.day):'Detalhes do débito';
  function keepFocus(event){
   if(event.key!=='Tab')return;
-  const elements=[...dialog.current.querySelectorAll('button:not(:disabled),a[href]')],first=elements[0],last=elements.at(-1),active=document.activeElement;
+  const elements=[...dialog.current.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled)')],first=elements[0],last=elements.at(-1),active=document.activeElement;
   if(event.shiftKey&&(active===first||active===heading.current)){event.preventDefault();last?.focus()}
   else if(!event.shiftKey&&active===last){event.preventDefault();first?.focus()}
  }
@@ -50,6 +50,7 @@ export function CalendarDebtDialog({selection,installments,onSelect,onClose,what
   <h3>Parcela selecionada</h3><dl className="calendar-debt-fields"><Field label="Parcela">{item.number} de {contract.installmentCount}</Field><Field label="Vencimento">{date(item.dueDate)}</Field><Field label="Valor da parcela">{money(item.amount)}</Field><Field label="Situação">{status.label}</Field></dl>
   <h3>Valores do contrato</h3><dl className="calendar-debt-fields"><Field label="Valor do contrato (imóvel)">{money(contract.propertyPrice)}</Field><Field label="Entrada contratada">{money(contract.downPayment)}</Field><Field label="Valor financiado">{money(contract.financedAmount)}</Field><Field label="Total das parcelas">{money(paid+balance)}</Field><Field label="Recebido em parcelas">{money(paid)}</Field><Field label="Saldo em parcelas">{money(balance)}</Field></dl><p className="hint">O saldo inclui todas as parcelas não quitadas deste contrato, inclusive as que ainda vão vencer ou estão em análise. A entrada é o valor previsto no contrato.</p>
   {item.status==='PENDING_REVIEW'&&<p className="hint">Há um comprovante aguardando análise para esta parcela.</p>}
+  {onManualReceiptToggle&&item.status!=='PAID'&&<section className="manual-receipt-settings"><h3>Opção manual desta parcela</h3><p>O Pix continua disponível. Libere o comprovante manual somente se necessário para a parcela {item.number}, com vencimento em {date(item.dueDate)}.</p><label className="manual-receipt-control"><input type="checkbox" checked={Boolean(item.manualReceiptEnabled)} disabled={manualReceiptBusy} onChange={event=>onManualReceiptToggle(item.id,event.target.checked)}/><span>Permitir envio de comprovante nesta parcela</span></label></section>}
   {link&&<a className="wa-button" href={link} target="_blank" rel="noopener noreferrer">Enviar lembrete pelo WhatsApp</a>}</>;
  })():<p>Esta parcela não está mais disponível. Feche os detalhes e consulte o calendário novamente.</p>}
  <footer><button type="button" className="secondary" onClick={onClose}>Fechar</button></footer></div></dialog>;
