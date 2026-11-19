@@ -75,12 +75,6 @@ const contractInclude={client:{include:{user:{select:{name:true,cpf:true,active:
 registerContractGenerationRoutes(app,{db,auth,current,admin,contractInclude});
 app.get('/api/contracts',auth,current,admin,wrap(async(_q,res)=>res.json(await db.contract.findMany({include:contractInclude,orderBy:{createdAt:'desc'}}))));
 app.get('/api/contracts/:id',auth,current,admin,wrap(async(req,res)=>{const c=await db.contract.findUnique({where:{id:req.params.id},include:contractInclude});if(!c)return res.status(404).json({error:'Contrato não encontrado'});res.json(c)}));
-app.delete('/api/contracts/:id',auth,current,admin,wrap(async(req,res)=>{
- const c=await db.contract.findUnique({where:{id:req.params.id},include:{installments:true}});
- if(!c)return res.status(404).json({error:'Contrato não encontrado'});
- if(c.installments.some(i=>i.status!=='OPEN')||await db.receipt.count({where:{installment:{contractId:c.id}}})||await db.pixPayment.count({where:{installment:{contractId:c.id}}}))return res.status(409).json({error:'Contrato movimentado: exclusão bloqueada para preservar registros financeiros'});
- await db.$transaction(async tx=>{await tx.installment.deleteMany({where:{contractId:c.id}});await tx.contract.delete({where:{id:c.id}})});res.json({ok:true});
-}));
 const uploadDir=path.resolve(process.env.UPLOAD_DIR||'private-uploads');
 registerReceiptRoutes(app,{db,auth,current,admin,uploadDir});
 

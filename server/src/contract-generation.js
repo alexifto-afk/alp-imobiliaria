@@ -1,3 +1,4 @@
+import {withUnmovedContract} from './contract-protection.js';
 const invalid=message=>Object.assign(new Error(message),{status:400});
 const cents=value=>{const amount=Number(value);if(!Number.isSafeInteger(amount)||amount<0)throw invalid('Valor monetário inválido (centavos).');return amount};
 function schedule(principal,n,type,rate){
@@ -34,12 +35,16 @@ export function registerContractGenerationRoutes(app,{db,auth,current,admin,cont
   const result=await db.contract.create({data:{clientId:client.id,propertyId:property.id,...data},include:contractInclude});res.status(201).json(result);
  }));
  app.patch('/api/contracts/:id',auth,current,admin,wrap(async(req,res)=>{
-  const contract=await db.contract.findUnique({where:{id:req.params.id},include:{installments:true}});
-  if(!contract)return res.status(404).json({error:'Contrato não encontrado'});
-  if(contract.installments.some(item=>item.status!=='OPEN'))return res.status(409).json({error:'Contrato com movimentações: edição financeira bloqueada para preservar pagamentos'});
-  const data=fields(req.body||{});
-  const receiptCount=await db.receipt.count({where:{installment:{contractId:contract.id}}}),paymentCount=await db.pixPayment.count({where:{installment:{contractId:contract.id}}});
-  if(receiptCount||paymentCount)return res.status(409).json({error:'Contrato possui comprovantes ou cobranças Pix: edição bloqueada'});
-  await db.$transaction(async tx=>{await tx.installment.deleteMany({where:{contractId:contract.id}});await tx.contract.update({where:{id:contract.id},data})});res.json({ok:true});
+  await withUnmovedContract(db,req.params.id,async(tx,contract)=>{
+   const data=fields(req.body||{});
+   await tx.installment.deleteMany({where:{contractId:contract.id}});
+   await tx.contract.update({where:{id:contract.id},data});
+  });res.json({ok:true});
+ }));
+ app.delete('/api/contracts/:id',auth,current,admin,wrap(async(req,res)=>{
+  await withUnmovedContract(db,req.params.id,async(tx,contract)=>{
+   await tx.installment.deleteMany({where:{contractId:contract.id}});
+   await tx.contract.delete({where:{id:contract.id}});
+  });res.json({ok:true});
  }));
 }

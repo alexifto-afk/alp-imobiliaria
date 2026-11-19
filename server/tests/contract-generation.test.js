@@ -14,13 +14,13 @@ test('centavos são distribuídos sem diferença na soma; juros usam a entrada c
  assert.throws(()=>entryInstallments(100,100,1,'NONE',0),{status:400});assert.throws(()=>entryInstallments(100,99,2,'NONE',0),{status:400});
 });
 async function setup(run){
- const state={writes:[],deleted:0,receipts:0,pix:0,contract:{id:'contract',installments:[{status:'OPEN'}]}};
- const db={client:{findUnique:async()=>({id:'client',user:{active:true}})},property:{findUnique:async()=>({id:'property',active:true})},contract:{findUnique:async()=>state.contract,create:async args=>{state.writes.push(args);return {id:'new',...args.data}},update:async args=>{state.writes.push(args);return args.data}},receipt:{count:async()=>state.receipts},pixPayment:{count:async()=>state.pix},installment:{deleteMany:async()=>{state.deleted++;return {count:1}}}};db.$transaction=fn=>fn(db);
+ const state={writes:[],deleted:0,deletedContracts:0,locks:0,receipts:0,pix:0,contract:{id:'contract',installments:[{status:'OPEN'}]}};
+ const db={$queryRaw:async()=>{state.locks++;return []},client:{findUnique:async()=>({id:'client',user:{active:true}})},property:{findUnique:async()=>({id:'property',active:true})},contract:{findUnique:async()=>state.contract,delete:async()=>{state.deletedContracts++;return {id:'contract'}},create:async args=>{state.writes.push(args);return {id:'new',...args.data}},update:async args=>{state.writes.push(args);return args.data}},receipt:{count:async()=>state.receipts},pixPayment:{count:async()=>state.pix},installment:{deleteMany:async()=>{state.deleted++;return {count:1}}}};db.$transaction=fn=>fn(db);
  const app=express();app.use(express.json());const auth=(req,res,next)=>{if(!req.get('x-role'))return res.sendStatus(401);req.auth={role:req.get('x-role')};next()};
  registerContractGenerationRoutes(app,{db,auth,current:(req,res,next)=>next(),admin:(req,res,next)=>req.auth.role==='ADMIN'?next():res.sendStatus(403),contractInclude:{}});
  app.use((error,req,res,next)=>res.status(error.status||500).json({error:error.message}));
  const listener=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s))});
- const send=(method,body,role='ADMIN')=>fetch('http://127.0.0.1:'+listener.address().port+'/api/contracts'+(method==='PATCH'?'/contract':''),{method,headers:{'content-type':'application/json',...(role?{'x-role':role}:{})},body:JSON.stringify(body)});
+ const send=(method,body,role='ADMIN')=>fetch('http://127.0.0.1:'+listener.address().port+'/api/contracts'+(method==='POST'?'':'/contract'),{method,headers:{'content-type':'application/json',...(role?{'x-role':role}:{})},body:JSON.stringify(body)});
  try{await run({state,db,send})}finally{await new Promise(resolve=>listener.close(resolve))}
 }
 const body={clientId:'client',propertyId:'property',propertyPrice:10000000,financedAmount:8000000,installmentCount:10,interestType:'NONE',monthlyRate:0,startDate:'2026-01-31'};
@@ -37,4 +37,15 @@ test('HTTP: contas sem permissão e contratos com movimentação não são alter
  for(const status of ['PAID','PENDING_REVIEW','REJECTED']){state.contract.installments=[{status}];assert.equal((await send('PATCH',body)).status,409)}
  state.contract.installments=[{status:'OPEN'}];state.receipts=1;assert.equal((await send('PATCH',body)).status,409);state.receipts=0;state.pix=1;assert.equal((await send('PATCH',body)).status,409);
  assert.equal(state.writes.length,0);assert.equal(state.deleted,0);
+}));
+
+test('HTTP: qualquer parcela paga bloqueia edição e exclusão, inclusive com parcelas abertas',async()=>setup(async({send,state})=>{
+ state.contract.installments=[{number:1,status:'OPEN'},{number:2,status:'PAID'}];
+ for(const method of ['PATCH','DELETE']){const result=await send(method,body);assert.equal(result.status,409);assert.match((await result.json()).error,/Após o primeiro pagamento/)}
+ assert.equal(state.writes.length,0);assert.equal(state.deleted,0);assert.equal(state.deletedContracts,0);assert.equal(state.locks,4);
+}));
+test('HTTP: exclusão mantém bloqueios de histórico e autorização; contrato sem movimento pode ser excluído',async()=>setup(async({send,state})=>{
+ assert.equal((await send('DELETE',body,null)).status,401);assert.equal((await send('DELETE',body,'CLIENT')).status,403);
+ state.receipts=1;assert.equal((await send('DELETE',body)).status,409);state.receipts=0;state.pix=1;assert.equal((await send('DELETE',body)).status,409);
+ state.pix=0;assert.equal((await send('DELETE',body)).status,200);assert.equal(state.deleted,1);assert.equal(state.deletedContracts,1);
 }));
