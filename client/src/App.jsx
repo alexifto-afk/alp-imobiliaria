@@ -186,7 +186,7 @@ const ALP_ADMIN_STYLES = `
 .alp-admin-shell h2,.alp-admin-shell h3{color:#25365a}.alp-admin-shell .section-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:15px;margin:0 0 20px}.alp-admin-shell .section-head p{color:#78849a}
 .alp-admin-shell button:not(.nav):not(.exit):not(.close):not(.link),.alp-admin-shell .wa-button{border-radius:12px;transition:filter .15s,transform .15s}
 .alp-admin-shell button:not(.nav):not(.exit):not(.close):not(.link):hover{filter:brightness(.96)}
-.alp-admin-shell button:not(.secondary):not(.danger):not(.nav):not(.exit):not(.close):not(.link){background:#4051d9;color:white;border-color:#4051d9}
+.alp-admin-shell button:not(.secondary):not(.danger):not(.nav):not(.exit):not(.close):not(.link):not(.calendar-debt-button):not(.calendar-more):not(.calendar-day-button){background:#4051d9;color:white;border-color:#4051d9}
 .alp-admin-shell button.secondary{background:#eef1ff!important;color:#3449ae!important;border:1px solid #dce3ff!important}.alp-admin-shell button.danger{background:#fff0f1!important;color:#b72d42!important;border:1px solid #ffdce2!important}
 .alp-admin-shell .field span{color:#4b5d7d;font-weight:650;font-size:13px}.alp-admin-shell input,.alp-admin-shell select,.alp-admin-shell textarea{background:#fff;color:#273750;border:1px solid #d9e1f0;border-radius:11px;max-width:100%}
 .alp-admin-shell input:focus,.alp-admin-shell select:focus,.alp-admin-shell textarea:focus{outline:2px solid #4051d950;outline-offset:1px;border-color:#4051d9}
