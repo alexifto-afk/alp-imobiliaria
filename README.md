@@ -78,3 +78,9 @@ Administradores podem configurar nome e logomarca na aba Configurações. Consul
 ## Comprovante de parcela e baixa manual
 
 O Pix permanece como padrão. Após liberação do administrador para aquela parcela, o cliente pode usar Já paguei / Enviar comprovante; o administrador confirma o recebimento em Comprovantes para dar baixa. Execute o SQL aditivo **antes de publicar a API**; veja [COMPROVANTES-E-BAIXA.md](COMPROVANTES-E-BAIXA.md).
+
+## Base das parcelas do cliente
+
+Na criação e na edição permitida de contratos, as parcelas são calculadas sobre a **entrada**, obtida por `valor total do imóvel − valor financiado`. Sem juros: `entrada ÷ quantidade de parcelas`. Exemplo: imóvel de R$ 100.000, financiado de R$ 80.000 e entrada de R$ 20.000 geram 10 parcelas de R$ 2.000. Juros simples e Tabela Price usam a mesma entrada como base e mantêm a taxa configurada. Diferenças de centavos são distribuídas entre as parcelas para preservar o total.
+
+É necessário ter entrada positiva e valores de parcela de pelo menos um centavo. A correção não recalcula contratos existentes automaticamente. Edições financeiras continuam bloqueadas quando há pagamentos, comprovantes ou cobranças Pix, para preservar o histórico. Sem alteração de esquema ou SQL adicional.

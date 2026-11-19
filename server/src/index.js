@@ -1,3 +1,4 @@
+import {registerContractGenerationRoutes} from './contract-generation.js';
 import {registerReceiptRoutes} from './receipt-routes.js';
 import {registerCompanyRoutes,getCompany} from './company-settings.js';
 import 'dotenv/config';
@@ -71,28 +72,9 @@ app.delete('/api/properties/:id',auth,current,admin,wrap(async(req,res)=>{
  await db.property.delete({where:{id:p.id}});res.json({ok:true});
 }));
 const contractInclude={client:{include:{user:{select:{name:true,cpf:true,active:true}}}},property:true,installments:{orderBy:{number:'asc'},include:{receipts:{orderBy:{createdAt:'desc'}}}}};
+registerContractGenerationRoutes(app,{db,auth,current,admin,contractInclude});
 app.get('/api/contracts',auth,current,admin,wrap(async(_q,res)=>res.json(await db.contract.findMany({include:contractInclude,orderBy:{createdAt:'desc'}}))));
-function schedule(principal,n,type,rate){const r=rate/100,values=[];if(type==='NONE'){const base=Math.floor(principal/n);for(let i=0;i<n;i++)values.push(base+(i<principal%n?1:0));}
-else if(type==='SIMPLE'){const total=Math.round(principal*(1+r*n)),base=Math.floor(total/n);for(let i=0;i<n;i++)values.push(base+(i<total%n?1:0));}
-else if(type==='PRICE'){if(r===0)return schedule(principal,n,'NONE',0);const total=Math.round(principal*(r*Math.pow(1+r,n))/(Math.pow(1+r,n)-1)*n),base=Math.floor(total/n);for(let i=0;i<n;i++)values.push(base+(i<total%n?1:0));}else throw Error('Modalidade de juros inválida');return values}
-function addMonth(date,n){const y=date.getUTCFullYear(),m=date.getUTCMonth()+n,d=date.getUTCDate(),last=new Date(Date.UTC(y,m+1,0)).getUTCDate();return new Date(Date.UTC(y,m,Math.min(d,last),12))}
-app.post('/api/contracts',auth,current,admin,wrap(async(req,res)=>{const b=req.body,n=Number(b.installmentCount),type=txt(b.interestType)||'NONE',rate=Number(b.monthlyRate||0);if(!Number.isInteger(n)||n<1||n>600||!['NONE','SIMPLE','PRICE'].includes(type)||!Number.isFinite(rate)||rate<0||rate>100)return res.status(400).json({error:'Parcelas ou juros inválidos'});
-const price=cents(b.propertyPrice),financed=cents(b.financedAmount);if(!price||financed>price)return res.status(400).json({error:'Valor total ou financiado inválido'});const start=new Date(`${b.startDate}T12:00:00.000Z`);if(Number.isNaN(start.getTime()))return res.status(400).json({error:'Data inválida'});const [c,p]=await Promise.all([db.client.findUnique({where:{id:b.clientId},include:{user:true}}),db.property.findUnique({where:{id:b.propertyId}})]);if(!c?.user.active||!p?.active)return res.status(400).json({error:'Cliente ou imóvel inexistente/inativo'});
-const amounts=schedule(financed,n,type,rate);const result=await db.contract.create({data:{clientId:c.id,propertyId:p.id,propertyPrice:price,financedAmount:financed,downPayment:price-financed,interestType:type,monthlyRate:rate,installmentCount:n,startDate:start,installments:{create:amounts.map((amount,i)=>({number:i+1,amount,dueDate:addMonth(start,i)}))}},include:contractInclude});res.status(201).json(result)}));
 app.get('/api/contracts/:id',auth,current,admin,wrap(async(req,res)=>{const c=await db.contract.findUnique({where:{id:req.params.id},include:contractInclude});if(!c)return res.status(404).json({error:'Contrato não encontrado'});res.json(c)}));
-app.patch('/api/contracts/:id',auth,current,admin,wrap(async(req,res)=>{
- const c=await db.contract.findUnique({where:{id:req.params.id},include:{installments:true}});
- if(!c)return res.status(404).json({error:'Contrato não encontrado'});
- if(c.installments.some(i=>i.status!=='OPEN'))return res.status(409).json({error:'Contrato com movimentações: edição financeira bloqueada para preservar pagamentos'});
- const b=req.body,n=Number(b.installmentCount),price=cents(b.propertyPrice),financed=cents(b.financedAmount),rate=Number(b.monthlyRate||0),type=txt(b.interestType)||'NONE';
- const start=new Date(String(b.startDate).slice(0,10)+'T12:00:00Z');
- if(!price||financed>price||!Number.isInteger(n)||n<1||n>600||!['NONE','SIMPLE','PRICE'].includes(type)||!Number.isFinite(rate)||rate<0||rate>100||Number.isNaN(start.getTime()))return res.status(400).json({error:'Dados do contrato inválidos'});
- if(c.installments.some(i=>i.status!=='OPEN'||i.receipts?.length))return res.status(409).json({error:'Contrato já movimentado'});
- const receiptCount=await db.receipt.count({where:{installment:{contractId:c.id}}});const paymentCount=await db.pixPayment.count({where:{installment:{contractId:c.id}}});
- if(receiptCount||paymentCount)return res.status(409).json({error:'Contrato possui comprovantes ou cobranças Pix: edição bloqueada'});
- const amounts=schedule(financed,n,type,rate);
- await db.$transaction(async tx=>{await tx.installment.deleteMany({where:{contractId:c.id}});await tx.contract.update({where:{id:c.id},data:{propertyPrice:price,financedAmount:financed,downPayment:price-financed,interestType:type,monthlyRate:rate,installmentCount:n,startDate:start,installments:{create:amounts.map((amount,i)=>({number:i+1,amount,dueDate:addMonth(start,i)}))}}})});res.json({ok:true});
-}));
 app.delete('/api/contracts/:id',auth,current,admin,wrap(async(req,res)=>{
  const c=await db.contract.findUnique({where:{id:req.params.id},include:{installments:true}});
  if(!c)return res.status(404).json({error:'Contrato não encontrado'});
