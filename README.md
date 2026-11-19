@@ -74,3 +74,7 @@ Consulte [NOTIFICACOES.md](NOTIFICACOES.md) para ativar notificações de vencim
 ## Identidade da empresa e suporte
 
 Administradores podem configurar nome e logomarca na aba Configurações. Consulte [CONFIGURACOES-EMPRESA.md](CONFIGURACOES-EMPRESA.md) para criar a tabela no Neon e publicar a alteração. O contato de suporte técnico aparece no rodapé do sistema e das páginas públicas.
+
+## Comprovante de parcela e baixa manual
+
+O Pix permanece como padrão. Após liberação do administrador para aquela parcela, o cliente pode usar Já paguei / Enviar comprovante; o administrador confirma o recebimento em Comprovantes para dar baixa. Execute o SQL aditivo **antes de publicar a API**; veja [COMPROVANTES-E-BAIXA.md](COMPROVANTES-E-BAIXA.md).

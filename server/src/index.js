@@ -1,3 +1,4 @@
+import {registerReceiptRoutes} from './receipt-routes.js';
 import {registerCompanyRoutes,getCompany} from './company-settings.js';
 import 'dotenv/config';
 import PDFDocument from 'pdfkit';
@@ -9,8 +10,8 @@ import {credentialVersion} from './password-reset.js';
 import {registerPasswordResetRoutes} from './password-reset-routes.js';
 import {validMpSignature} from './mp-signature.js';
 import {confirmarPagamentoPix,reconciliarCobranca,reconciliarParcela,reconciliarPendentes} from './pix-confirmation.js';
-import express from 'express';import cors from 'cors';import bcrypt from 'bcryptjs';import jwt from 'jsonwebtoken';import multer from 'multer';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {PrismaClient} from '@prisma/client';
-const db=new PrismaClient(),app=express();app.disable('x-powered-by');app.use((req,res,next)=>(req.path==='/api/company'&&req.method==='PUT'?express.json({limit:'3mb'}):express.json({limit:'100kb'}))(req,res,next));
+import express from 'express';import cors from 'cors';import bcrypt from 'bcryptjs';import jwt from 'jsonwebtoken';import path from 'node:path';import crypto from 'node:crypto';import {PrismaClient} from '@prisma/client';
+const db=new PrismaClient({omit:{receipt:{fileData:true}}}),app=express();app.disable('x-powered-by');app.use((req,res,next)=>(req.path==='/api/company'&&req.method==='PUT'?express.json({limit:'3mb'}):express.json({limit:'100kb'}))(req,res,next));
 // Render encaminha requisições por proxy; permite limitar pelo IP do cliente.
 app.set('trust proxy',process.env.NODE_ENV==='production'?1:false);
 const origins=(process.env.CLIENT_ORIGIN||'http://localhost:5173').split(',').map(s=>s.trim());app.use(cors({origin:(origin,cb)=>cb(null,!origin||origins.includes(origin))}));
@@ -98,8 +99,8 @@ app.delete('/api/contracts/:id',auth,current,admin,wrap(async(req,res)=>{
  if(c.installments.some(i=>i.status!=='OPEN')||await db.receipt.count({where:{installment:{contractId:c.id}}})||await db.pixPayment.count({where:{installment:{contractId:c.id}}}))return res.status(409).json({error:'Contrato movimentado: exclusão bloqueada para preservar registros financeiros'});
  await db.$transaction(async tx=>{await tx.installment.deleteMany({where:{contractId:c.id}});await tx.contract.delete({where:{id:c.id}})});res.json({ok:true});
 }));
-const uploadDir=process.env.UPLOAD_DIR||path.resolve('private-uploads');fs.mkdirSync(uploadDir,{recursive:true});const upload=multer({storage:multer.diskStorage({destination:uploadDir,filename:(_req,file,cb)=>cb(null,crypto.randomUUID()+path.extname(file.originalname).toLowerCase())}),limits:{fileSize:8*1024*1024},fileFilter:(_req,file,cb)=>cb(null,['application/pdf','image/jpeg','image/png','image/webp'].includes(file.mimetype))});
-app.post('/api/installments/:id/receipts',auth,current,upload.single('file'),wrap(async(req,res)=>{if(!req.file)return res.status(400).json({error:'Envie PDF ou imagem até 8 MB'});const installment=await db.installment.findUnique({where:{id:req.params.id},include:{contract:{include:{client:true}}}});if(!installment||(req.auth.role==='CLIENT'&&installment.contract.client.userId!==req.auth.id)){fs.unlinkSync(req.file.path);return res.status(403).json({error:'Acesso negado'})}if(installment.status==='PAID')return res.status(409).json({error:'Parcela já quitada'});const receipt=await db.receipt.create({data:{installmentId:installment.id,fileName:req.file.filename,originalName:req.file.originalname,mimeType:req.file.mimetype}});if(installment.status!=='PAID')await db.installment.update({where:{id:installment.id},data:{status:'PENDING_REVIEW'}});res.status(201).json(receipt)}));
+const uploadDir=path.resolve(process.env.UPLOAD_DIR||'private-uploads');
+registerReceiptRoutes(app,{db,auth,current,admin,uploadDir});
 
 // Pix Nubank: QR estatico de pagamento. Nao confirma automaticamente recebimento.
 // A conciliacao automatica depende de API/webhook oficial de um provedor habilitado.
@@ -242,18 +243,6 @@ app.get('/api/installments/:id/receipt-pdf',auth,current,wrap(async(req,res)=>{
   pdf.end();
 }));
 
-app.get('/api/receipts/:id/file',auth,current,wrap(async(req,res)=>{const r=await db.receipt.findUnique({where:{id:req.params.id},include:{installment:{include:{contract:{include:{client:true}}}}}});if(!r||(req.auth.role==='CLIENT'&&r.installment.contract.client.userId!==req.auth.id))return res.status(403).json({error:'Acesso negado'});const file=path.join(uploadDir,path.basename(r.fileName));if(!fs.existsSync(file))return res.status(404).json({error:'Arquivo não disponível no armazenamento'});res.type(r.mimeType);res.setHeader('Content-Disposition',`inline; filename="${r.fileName}"`);res.sendFile(file)}));
-app.patch('/api/receipts/:id',auth,current,admin,wrap(async(req,res)=>{const status=txt(req.body.status);if(!['APPROVED','REJECTED'].includes(status))return res.status(400).json({error:'Status inválido'});const previous=await db.receipt.findUnique({where:{id:req.params.id}});if(!previous)return res.status(404).json({error:'Comprovante não encontrado'});if(previous.status!=='PENDING')return res.status(409).json({error:'Comprovante já analisado'});const receipt=await db.receipt.update({where:{id:req.params.id},data:{status,note:optional(req.body.note),reviewedAt:new Date()}});await db.installment.update({where:{id:receipt.installmentId},data:{status:status==='APPROVED'?'PAID':'REJECTED'}});res.json(receipt)}));
-app.delete('/api/receipts/:id',auth,current,admin,wrap(async(req,res)=>{
- const r=await db.receipt.findUnique({where:{id:req.params.id}});
- if(!r)return res.status(404).json({error:'Comprovante não encontrado'});
- if(r.status==='APPROVED')return res.status(409).json({error:'Comprovante aprovado não pode ser excluído; preserve o histórico financeiro'});
- await db.receipt.delete({where:{id:r.id}});
- const file=path.join(uploadDir,path.basename(r.fileName));if(fs.existsSync(file))fs.unlinkSync(file);
- const other=await db.receipt.count({where:{installmentId:r.installmentId,status:'PENDING'}});
- if(!other){const i=await db.installment.findUnique({where:{id:r.installmentId}});if(i.status==='PENDING_REVIEW')await db.installment.update({where:{id:i.id},data:{status:'OPEN'}})}
- res.json({ok:true});
-}));
 app.use((err,_req,res,_next)=>{console.error(err);if(err.code==='P2002')return res.status(409).json({error:'CPF ou valor único já cadastrado'});if(err.code==='P2025')return res.status(404).json({error:'Registro não encontrado'});res.status(err.status||400).json({error:err.message||'Erro ao processar solicitação'})});
 // Recupera notificações perdidas mesmo quando o cliente fecha o modal.
 let conciliandoPix=false;

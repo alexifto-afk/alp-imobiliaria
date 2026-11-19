@@ -82,6 +82,7 @@ model Installment {
   contract    Contract @relation(fields: [contractId], references: [id])
   number      Int
   dueDate     DateTime
+  manualReceiptEnabled Boolean @default(false)
   amount      Int
   status      InstallmentStatus @default(OPEN)
   receipts    Receipt[]
@@ -94,6 +95,8 @@ model Receipt {
   installment   Installment @relation(fields: [installmentId], references: [id])
   fileName      String
   originalName  String
+  fileData      Bytes?
+  reviewedBy    String?
   mimeType      String
   status        ReceiptStatus @default(PENDING)
   note          String?
